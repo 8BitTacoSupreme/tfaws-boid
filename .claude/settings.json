@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-sqlite", "--db-path", "./memory/dev.db"]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-fetch"]
+    },
+    "terraform": {
+      "command": "npx",
+      "args": ["-y", "terraform-mcp-server"]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "bash(terraform:*)",
+      "bash(aws:*)",
+      "bash(localstack:*)",
+      "bash(tflint:*)",
+      "bash(tfsec:*)",
+      "bash(infracost:*)",
+      "bash(sqlite3:*)",
+      "bash(jq:*)",
+      "bash(podman:*)",
+      "bash(shellcheck:*)",
+      "bash(python3:*)",
+      "bash(node:*)",
+      "bash(npm:*)"
+    ]
+  }
+}
