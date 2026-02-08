@@ -1,0 +1,370 @@
+{
+  "_meta": {
+    "source": "terraform-aws-boid Canon — sourced from AWS Service Quotas documentation and operational experience",
+    "version": "0.2.0",
+    "date": "2026-02-08",
+    "description": "AWS service quotas and limits that commonly cause Terraform failures. Focuses on defaults that surprise people, not the full quota catalog.",
+    "schema": {
+      "service": "AWS service name",
+      "limit_name": "Human-readable limit name",
+      "default_value": "Default quota value",
+      "unit": "Unit of measurement",
+      "adjustable": "Whether the limit can be increased via support ticket",
+      "terraform_impact": "How hitting this limit manifests in Terraform",
+      "regions_vary": "Whether the limit varies by region",
+      "notes": "Tribal knowledge about this limit"
+    }
+  },
+  "limits": [
+    {
+      "service": "ec2",
+      "limit_name": "VPCs per region",
+      "default_value": 5,
+      "unit": "VPCs",
+      "adjustable": true,
+      "terraform_impact": "terraform apply fails with VpcLimitExceeded when creating the 6th VPC. Common in multi-environment setups (dev/staging/prod + default VPC = 4 used).",
+      "regions_vary": false,
+      "notes": "The default VPC counts against this limit. Request increase early in multi-environment projects."
+    },
+    {
+      "service": "ec2",
+      "limit_name": "Elastic IPs per region",
+      "default_value": 5,
+      "unit": "EIPs",
+      "adjustable": true,
+      "terraform_impact": "aws_eip creation fails with AddressLimitExceeded. NAT gateways each consume an EIP — a 3-AZ VPC with NAT needs 3 EIPs.",
+      "regions_vary": false,
+      "notes": "NAT gateways are the #1 consumer. 3-AZ VPC = 3 EIPs for NAT + 2 for bastion/NLB = limit hit immediately."
+    },
+    {
+      "service": "ec2",
+      "limit_name": "Security groups per VPC",
+      "default_value": 2500,
+      "unit": "security groups",
+      "adjustable": true,
+      "terraform_impact": "Rarely hit directly, but the combination of rules-per-SG × SGs-per-ENI can limit effective SG usage long before 2500.",
+      "regions_vary": false,
+      "notes": "The real constraint is rules per SG (60 default) and SGs per network interface (5 default). The product (rules × SGs) per ENI is capped at 300."
+    },
+    {
+      "service": "ec2",
+      "limit_name": "Rules per security group",
+      "default_value": 60,
+      "unit": "rules (inbound + outbound each)",
+      "adjustable": true,
+      "terraform_impact": "aws_security_group_rule creation fails with RulesPerSecurityGroupLimitExceeded. Each CIDR block is a separate rule — a rule allowing 10 CIDRs counts as 10.",
+      "regions_vary": false,
+      "notes": "Each CIDR in cidr_blocks counts as one rule. Use aws_ec2_managed_prefix_list to group CIDRs into one rule entry. The 60-rule limit is per direction (inbound/outbound)."
+    },
+    {
+      "service": "ec2",
+      "limit_name": "Security groups per network interface",
+      "default_value": 5,
+      "unit": "security groups",
+      "adjustable": true,
+      "terraform_impact": "aws_network_interface or aws_instance fails with SecurityGroupsPerInterfaceLimitExceeded. Common with ECS tasks that need multiple SGs (service, DB access, monitoring).",
+      "regions_vary": false,
+      "notes": "The product of (rules per SG × SGs per ENI) is capped at 300. If you increase SGs per ENI, reduce rules per SG or vice versa."
+    },
+    {
+      "service": "ec2",
+      "limit_name": "On-Demand instances per region (by type)",
+      "default_value": "varies (5-256 vCPUs by instance family)",
+      "unit": "vCPUs",
+      "adjustable": true,
+      "terraform_impact": "aws_instance creation fails with InstanceLimitExceeded. The error message shows vCPU count, not instance count. A single m5.24xlarge (96 vCPUs) can exceed the default limit.",
+      "regions_vary": true,
+      "notes": "Limits are per instance family per region, measured in vCPUs not instance count. New accounts start with very low limits. Spot instances have separate limits."
+    },
+    {
+      "service": "iam",
+      "limit_name": "Managed policies per IAM role",
+      "default_value": 10,
+      "unit": "policies",
+      "adjustable": true,
+      "terraform_impact": "aws_iam_role_policy_attachment fails with LimitExceeded when attaching the 11th managed policy. Use inline policies (aws_iam_role_policy) as a workaround — inline policies don't count against this limit.",
+      "regions_vary": false,
+      "notes": "This limit applies to managed policies (aws_iam_role_policy_attachment). Inline policies (aws_iam_role_policy) are separately limited to 10 per role. Combine both for up to 20 effective policy slots."
+    },
+    {
+      "service": "iam",
+      "limit_name": "IAM policy document size",
+      "default_value": 6144,
+      "unit": "characters",
+      "adjustable": false,
+      "terraform_impact": "aws_iam_policy creation fails with MalformedPolicyDocument or LimitExceeded: 'Cannot exceed quota for PolicySize'. The Terraform plan shows no issue — only fails at apply time.",
+      "regions_vary": false,
+      "notes": "6,144 chars for managed policies, 2,048 chars for role trust policies (expandable to 4,096 via support). Whitespace counts! Use terraform fmt on policy JSON and minify if approaching the limit."
+    },
+    {
+      "service": "iam",
+      "limit_name": "IAM roles per account",
+      "default_value": 1000,
+      "unit": "roles",
+      "adjustable": true,
+      "terraform_impact": "aws_iam_role creation fails with LimitExceededException. Common in accounts that deploy many microservices (each with its own role) or use per-environment roles.",
+      "regions_vary": false,
+      "notes": "Service-linked roles count against this limit. ECS, Lambda, and other services auto-create these. An account with 50 microservices × 4 environments = 200 roles minimum."
+    },
+    {
+      "service": "s3",
+      "limit_name": "Buckets per account",
+      "default_value": 100,
+      "unit": "buckets",
+      "adjustable": true,
+      "terraform_impact": "aws_s3_bucket creation fails with TooManyBuckets. Hard to hit for small orgs but common in accounts that create per-service or per-deployment buckets without cleanup.",
+      "regions_vary": false,
+      "notes": "This is a global (cross-region) limit. Deleted bucket names are reserved for 24 hours. Can be increased to 1000 via support. Consider S3 prefixes instead of separate buckets."
+    },
+    {
+      "service": "s3",
+      "limit_name": "Bucket policy size",
+      "default_value": 20480,
+      "unit": "characters",
+      "adjustable": false,
+      "terraform_impact": "aws_s3_bucket_policy fails with 'Policy has invalid resource'. The actual cause is size, but the error message is misleading. Long lists of VPC endpoints or IP ranges push policies over the limit.",
+      "regions_vary": false,
+      "notes": "20KB limit. IP allowlists and VPC endpoint policies are the usual culprits. Use S3 Access Points instead of complex bucket policies. Or use IAM policies for access control."
+    },
+    {
+      "service": "lambda",
+      "limit_name": "Concurrent executions per region",
+      "default_value": 1000,
+      "unit": "concurrent executions",
+      "adjustable": true,
+      "terraform_impact": "Lambda invocations throttled with TooManyRequestsException. Not a Terraform apply error — hits at runtime. But aws_lambda_function_event_invoke_config and reserved_concurrent_executions can cause apply-time issues if exceeding account limits.",
+      "regions_vary": true,
+      "notes": "Reserved concurrency (reserved_concurrent_executions) subtracts from the unreserved pool. If 10 functions each reserve 100, the account has 0 unreserved left. Provisioned concurrency is a separate mechanism."
+    },
+    {
+      "service": "lambda",
+      "limit_name": "Deployment package size",
+      "default_value": 50,
+      "unit": "MB (direct upload) / 250 MB (unzipped)",
+      "adjustable": false,
+      "terraform_impact": "aws_lambda_function creation fails with 'RequestEntityTooLargeException' or 'Unzipped size must be smaller than 262144000 bytes'. Common with ML models or bundled dependencies.",
+      "regions_vary": false,
+      "notes": "50MB zipped (direct upload), 250MB unzipped. For larger packages: use S3 upload (s3_bucket + s3_key) for zip > 50MB. For > 250MB: use container images (image_uri) with 10GB limit."
+    },
+    {
+      "service": "lambda",
+      "limit_name": "ENI capacity for VPC Lambda functions",
+      "default_value": 250,
+      "unit": "ENIs per subnet",
+      "adjustable": true,
+      "terraform_impact": "aws_lambda_function VPC configuration fails or Lambda invocations fail with ENILimitReachedException. Not visible during terraform apply — manifests at invocation time.",
+      "regions_vary": false,
+      "notes": "VPC-enabled Lambda functions use Hyperplane ENIs (shared since 2019 improvements). But each unique SG+subnet combination still needs at least one ENI. ENI cleanup after Lambda deletion takes 10-45 minutes."
+    },
+    {
+      "service": "rds",
+      "limit_name": "DB instances per region",
+      "default_value": 40,
+      "unit": "instances",
+      "adjustable": true,
+      "terraform_impact": "aws_db_instance creation fails with InstanceQuotaExceeded. Read replicas count against this limit. An Aurora cluster with 3 reader replicas = 4 instances.",
+      "regions_vary": false,
+      "notes": "Includes all DB engines and multi-AZ pairs (each AZ is an instance). Aurora clusters with replicas hit this fast. Reserved instances don't increase the limit."
+    },
+    {
+      "service": "rds",
+      "limit_name": "Total storage per region",
+      "default_value": 100000,
+      "unit": "GB",
+      "adjustable": true,
+      "terraform_impact": "aws_db_instance creation or modification fails with StorageQuotaExceeded. The 100TB default is generous, but large data warehousing setups can hit it.",
+      "regions_vary": false,
+      "notes": "Includes all DB instances in the region. Aurora storage is auto-scaling and counts toward this. The limit is rarely hit but important for large-scale deployments."
+    },
+    {
+      "service": "ecs",
+      "limit_name": "Services per cluster",
+      "default_value": 5000,
+      "unit": "services",
+      "adjustable": false,
+      "terraform_impact": "aws_ecs_service creation fails with ClusterContainsTooManyServices. Extremely rare — you'd need a massive monocluster.",
+      "regions_vary": false,
+      "notes": "The practical limit is usually task definition size (64KB) and ENI limits, not services per cluster. 5000 services is rarely a bottleneck."
+    },
+    {
+      "service": "ecs",
+      "limit_name": "Tasks per service (Fargate)",
+      "default_value": 5000,
+      "unit": "tasks",
+      "adjustable": true,
+      "terraform_impact": "aws_ecs_service with desired_count > 5000 fails silently — the service caps at 5000 tasks and doesn't error in Terraform. Drift detection will show a permanent diff.",
+      "regions_vary": false,
+      "notes": "For Fargate tasks. EC2 launch type is limited by registered container instances. Use multiple services with an ALB for >5000 tasks of the same application."
+    },
+    {
+      "service": "ecs",
+      "limit_name": "Task definition size",
+      "default_value": 64,
+      "unit": "KB",
+      "adjustable": false,
+      "terraform_impact": "aws_ecs_task_definition creation fails with ClientException: 'Task definition size is too large'. Common with many environment variables, large container definitions, or embedded policy documents.",
+      "regions_vary": false,
+      "notes": "64KB maximum. Environment variables and secrets are the usual culprits. Move large configs to S3 and fetch at startup. Use Parameter Store/Secrets Manager references instead of inline values."
+    },
+    {
+      "service": "elbv2",
+      "limit_name": "Target groups per ALB",
+      "default_value": 100,
+      "unit": "target groups",
+      "adjustable": false,
+      "terraform_impact": "aws_lb_listener_rule fails with TooManyTargetGroupsException when the total forwarding targets across all rules exceeds 100. The error is on the listener rule, not the target group.",
+      "regions_vary": false,
+      "notes": "Counted across all listener rules on the ALB. A weighted routing rule with 3 target groups counts as 3. Use path-based routing efficiently or split across multiple ALBs."
+    },
+    {
+      "service": "elbv2",
+      "limit_name": "Rules per ALB listener",
+      "default_value": 100,
+      "unit": "rules (plus default)",
+      "adjustable": false,
+      "terraform_impact": "aws_lb_listener_rule creation fails with TooManyRulesException. Each distinct path pattern or host header is a rule. Microservice architectures with many routes hit this.",
+      "regions_vary": false,
+      "notes": "100 rules + 1 default rule = 101 total. Each rule can have multiple conditions (AND logic) but each rule is one entry. For more routes: use multiple listeners on different ports or an API Gateway."
+    },
+    {
+      "service": "elbv2",
+      "limit_name": "Load balancers per region",
+      "default_value": 50,
+      "unit": "load balancers",
+      "adjustable": true,
+      "terraform_impact": "aws_lb creation fails with TooManyLoadBalancersException. Shared across ALB, NLB, and GLB types. Common in accounts with many services each having their own ALB.",
+      "regions_vary": false,
+      "notes": "Classic LBs have a separate limit of 20. Consider sharing ALBs across services using host-based routing instead of one ALB per service."
+    },
+    {
+      "service": "dynamodb",
+      "limit_name": "Tables per region",
+      "default_value": 2500,
+      "unit": "tables",
+      "adjustable": true,
+      "terraform_impact": "aws_dynamodb_table creation fails with LimitExceededException. Rarely hit directly but can surprise in multi-tenant architectures using table-per-tenant patterns.",
+      "regions_vary": false,
+      "notes": "2500 is generous. The practical limit is more often GSI count (20 per table) or throughput capacity across all tables."
+    },
+    {
+      "service": "dynamodb",
+      "limit_name": "Global secondary indexes per table",
+      "default_value": 20,
+      "unit": "GSIs",
+      "adjustable": false,
+      "terraform_impact": "aws_dynamodb_table creation or update fails when adding the 21st GSI. Each GSI is essentially a full table copy — costs scale linearly.",
+      "regions_vary": false,
+      "notes": "Hard limit. Cannot be increased. Design access patterns carefully. Overloaded GSIs (composite sort keys) can reduce the number needed. Each GSI adds write latency and cost."
+    },
+    {
+      "service": "sqs",
+      "limit_name": "Queues per region",
+      "default_value": "unlimited (was 120,000)",
+      "unit": "queues",
+      "adjustable": false,
+      "terraform_impact": "Practically unlimited now. The old limit of 120,000 was removed. However, queue creation rate is throttled — bulk terraform apply creating many queues may hit API throttling.",
+      "regions_vary": false,
+      "notes": "Not a practical concern. API rate limiting (CreateQueue: 2/sec) is more likely to impact bulk Terraform operations than the queue count limit."
+    },
+    {
+      "service": "sns",
+      "limit_name": "Topics per region",
+      "default_value": 100000,
+      "unit": "topics",
+      "adjustable": true,
+      "terraform_impact": "Rarely hit. API rate limiting on CreateTopic is more likely to impact Terraform than the topic count limit.",
+      "regions_vary": false,
+      "notes": "100K is generous. Subscriptions per topic (12.5M) is also rarely a concern. Focus on delivery policies and DLQ configuration instead."
+    },
+    {
+      "service": "sns",
+      "limit_name": "Subscriptions per topic",
+      "default_value": 12500000,
+      "unit": "subscriptions",
+      "adjustable": false,
+      "terraform_impact": "Not a Terraform concern. But managing >1000 subscriptions via aws_sns_topic_subscription resources is slow — Terraform refreshes each one individually.",
+      "regions_vary": false,
+      "notes": "Performance concern: each aws_sns_topic_subscription is a separate API call during refresh. For large fan-out, consider managing subscriptions outside Terraform."
+    },
+    {
+      "service": "route53",
+      "limit_name": "Hosted zones per account",
+      "default_value": 500,
+      "unit": "hosted zones",
+      "adjustable": true,
+      "terraform_impact": "aws_route53_zone creation fails with TooManyHostedZones. Common in multi-tenant SaaS that creates a subdomain zone per tenant.",
+      "regions_vary": false,
+      "notes": "500 default, can be increased. Each zone costs $0.50/month. Consider using a single zone with many records instead of per-entity zones."
+    },
+    {
+      "service": "route53",
+      "limit_name": "Records per hosted zone",
+      "default_value": 10000,
+      "unit": "records",
+      "adjustable": true,
+      "terraform_impact": "aws_route53_record creation fails. Terraform manages each record as a separate resource — 10K records means 10K API calls during refresh, which is very slow (30+ minutes).",
+      "regions_vary": false,
+      "notes": "Performance is the real issue, not the limit. For >1000 records, consider using aws_route53_record with for_each over a map to reduce resource count, or manage records outside Terraform."
+    },
+    {
+      "service": "acm",
+      "limit_name": "Certificates per region",
+      "default_value": 2500,
+      "unit": "certificates",
+      "adjustable": true,
+      "terraform_impact": "aws_acm_certificate creation fails with LimitExceededException. Common with wildcard + specific domain certificates that pile up from failed deployments.",
+      "regions_vary": false,
+      "notes": "ISSUED + PENDING certificates count. Clean up old certificates regularly. CloudFront requires certificates in us-east-1, so that region fills up fastest."
+    },
+    {
+      "service": "secretsmanager",
+      "limit_name": "Secrets per region",
+      "default_value": 500000,
+      "unit": "secrets",
+      "adjustable": false,
+      "terraform_impact": "Rarely hit. But secrets scheduled for deletion (7-30 day window) still count. aws_secretsmanager_secret with recovery_window_in_days = 0 for immediate deletion in dev/test.",
+      "regions_vary": false,
+      "notes": "500K is generous. The cost ($0.40/secret/month) is more limiting than the quota. recovery_window_in_days must be 0 or 7-30 — terraform apply fails if set to 1-6."
+    },
+    {
+      "service": "secretsmanager",
+      "limit_name": "Secret value size",
+      "default_value": 65536,
+      "unit": "bytes",
+      "adjustable": false,
+      "terraform_impact": "aws_secretsmanager_secret_version creation fails if the secret string exceeds 64KB. Common when storing large certificate bundles or multi-line configurations.",
+      "regions_vary": false,
+      "notes": "64KB max for secret string. Binary secrets also 64KB. For larger values: store in S3 with encryption, reference the S3 location in the secret."
+    },
+    {
+      "service": "cloudwatch",
+      "limit_name": "Alarms per region",
+      "default_value": 5000,
+      "unit": "alarms",
+      "adjustable": true,
+      "terraform_impact": "aws_cloudwatch_metric_alarm creation fails with LimitExceededException. Microservice architectures with per-service alarms hit this fast (10 services × 10 alarms × 4 envs = 400).",
+      "regions_vary": false,
+      "notes": "Composite alarms count separately (up to 500 default). Consider alarm consolidation and using composite alarms to reduce count."
+    },
+    {
+      "service": "cloudwatch",
+      "limit_name": "Log groups per region",
+      "default_value": 1000000,
+      "unit": "log groups",
+      "adjustable": false,
+      "terraform_impact": "Rarely hit. But auto-created log groups (Lambda, ECS) pile up and cost money via log storage. Set retention_in_days on aws_cloudwatch_log_group to avoid unbounded growth.",
+      "regions_vary": false,
+      "notes": "The real issue is cost, not the limit. Log groups without retention policies store logs forever. Always set retention_in_days (e.g., 30 for dev, 90 for prod)."
+    },
+    {
+      "service": "sts",
+      "limit_name": "Role session duration",
+      "default_value": 3600,
+      "unit": "seconds (1 hour)",
+      "adjustable": true,
+      "terraform_impact": "Long terraform apply runs fail mid-apply when the assumed role session expires. The error is often a random AccessDenied on an unrelated resource, making it hard to debug.",
+      "regions_vary": false,
+      "notes": "Default 1 hour, max 12 hours (set via max_session_duration on the role). For long Terraform runs: increase the role's max_session_duration and set duration_seconds in the provider's assume_role block."
+    }
+  ]
+}

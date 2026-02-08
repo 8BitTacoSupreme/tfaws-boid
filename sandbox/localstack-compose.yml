@@ -1,0 +1,31 @@
+# LocalStack sandbox for terraform-aws-boid
+# Provides a local AWS mock for validating Terraform plans before apply.
+#
+# Usage:
+#   podman-compose -f sandbox/localstack-compose.yml up -d
+#   podman-compose -f sandbox/localstack-compose.yml down
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: boid-localstack
+    ports:
+      - "4566:4566"           # LocalStack Gateway
+      - "4510-4559:4510-4559" # External service ports
+    environment:
+      - SERVICES=s3,ec2,iam,sts,rds,ecs,elbv2,logs,cloudwatch,lambda,dynamodb,sqs,sns,route53,acm,secretsmanager
+      - DEBUG=0
+      - PERSISTENCE=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - localstack-data:/var/lib/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  localstack-data:

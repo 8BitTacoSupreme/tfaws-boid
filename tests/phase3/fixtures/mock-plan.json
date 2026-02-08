@@ -1,0 +1,85 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "planned_values": {},
+  "resource_changes": [
+    {
+      "address": "aws_vpc.main",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.0.0/16",
+          "tags": {"Name": "main-vpc"}
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.web",
+      "type": "aws_security_group",
+      "name": "web",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "web-sg",
+          "vpc_id": "vpc-12345"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.db",
+      "type": "aws_security_group",
+      "name": "db",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "db-sg",
+          "vpc_id": "vpc-12345"
+        }
+      }
+    },
+    {
+      "address": "aws_s3_bucket.logs",
+      "type": "aws_s3_bucket",
+      "name": "logs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "bucket": "my-logs-bucket"
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "error",
+      "summary": "Cycle: aws_security_group.web, aws_security_group.db",
+      "detail": "A cycle was detected in the resource dependency graph. This is usually caused by security groups that reference each other in inline blocks.",
+      "address": "aws_security_group.web"
+    },
+    {
+      "severity": "warning",
+      "summary": "Provider produced inconsistent final plan",
+      "detail": "The provider hashicorp/aws produced an unexpected plan during apply.",
+      "address": "aws_s3_bucket.logs"
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "version_constraint": "~> 5.0"
+      }
+    }
+  }
+}

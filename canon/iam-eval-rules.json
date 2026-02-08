@@ -1,0 +1,290 @@
+{
+  "_meta": {
+    "source": "terraform-aws-boid Canon — sourced from AWS IAM documentation, Terraform provider behavior, and operational experience",
+    "version": "0.2.0",
+    "date": "2026-02-08",
+    "description": "IAM policy evaluation order and interaction rules. The full mental model for how AWS evaluates permissions — the part that trips everyone up.",
+    "schema": {
+      "rule_order": "Numeric order in evaluation sequence",
+      "rule_name": "Name of the evaluation step",
+      "description": "What this step does",
+      "terraform_relevance": "How this affects Terraform resource definitions",
+      "common_mistakes": "Mistakes people make related to this rule",
+      "examples": "Concrete policy examples showing the rule in action"
+    }
+  },
+  "evaluation_order": [
+    {
+      "rule_order": 1,
+      "rule_name": "Explicit Deny",
+      "description": "If any applicable policy contains an explicit Deny for the action, the request is denied. This is evaluated first and overrides everything.",
+      "terraform_relevance": "An aws_iam_policy with a Deny statement will block access even if another policy Allows it. Common when adding guardrail policies via aws_iam_policy_attachment.",
+      "common_mistakes": [
+        "Adding a broad Allow policy and expecting it to override an existing Deny",
+        "Forgetting that SCPs with Deny propagate to all child accounts",
+        "Using NotAction in a Deny statement without understanding it denies everything EXCEPT the listed actions"
+      ],
+      "examples": [
+        {
+          "scenario": "Deny overrides Allow",
+          "policy": "{\"Effect\": \"Deny\", \"Action\": \"s3:DeleteBucket\", \"Resource\": \"*\"}",
+          "result": "DeleteBucket denied even if another policy allows s3:*"
+        }
+      ]
+    },
+    {
+      "rule_order": 2,
+      "rule_name": "Service Control Policies (SCPs)",
+      "description": "If the account is in an AWS Organization, SCPs are evaluated. SCPs set the maximum permissions for accounts — they cannot grant access, only restrict it. The intersection of SCP allows and identity-based allows determines access.",
+      "terraform_relevance": "Terraform applies will fail with AccessDenied if the action is not permitted by SCPs, even though the IAM role has an explicit Allow. Cannot be debugged from Terraform alone — requires checking Organization SCPs.",
+      "common_mistakes": [
+        "Assuming full admin in a child account without checking SCP restrictions",
+        "Terraform plan succeeds but apply fails because plan doesn't evaluate SCPs",
+        "Not realizing SCPs don't apply to the management account"
+      ],
+      "examples": [
+        {
+          "scenario": "SCP blocks region usage",
+          "policy": "{\"Effect\": \"Deny\", \"Action\": \"*\", \"Resource\": \"*\", \"Condition\": {\"StringNotEquals\": {\"aws:RequestedRegion\": [\"us-east-1\", \"us-west-2\"]}}}",
+          "result": "Terraform resources in eu-west-1 fail with AccessDenied despite admin role"
+        }
+      ]
+    },
+    {
+      "rule_order": 3,
+      "rule_name": "Resource-Based Policies (Same Account)",
+      "description": "For same-account access, resource-based policies form a UNION with identity-based policies. If either the resource-based policy OR the identity-based policy allows the action, access is granted (absent explicit deny).",
+      "terraform_relevance": "S3 bucket policies (aws_s3_bucket_policy), SQS queue policies (aws_sqs_queue_policy), and KMS key policies (aws_kms_key) can independently grant access. An IAM role with no S3 permissions can still access a bucket if the bucket policy allows it.",
+      "common_mistakes": [
+        "Removing an IAM policy and expecting access to stop, but a resource-based policy still allows it",
+        "Not realizing KMS key policies are mandatory — unlike other services, KMS requires the key policy to grant access even to the account root",
+        "Terraform destroy order: deleting IAM role before the resource-based policy that references it causes orphaned policy statements"
+      ],
+      "examples": [
+        {
+          "scenario": "S3 bucket policy grants access independently",
+          "policy": "{\"Effect\": \"Allow\", \"Principal\": {\"AWS\": \"arn:aws:iam::123456789012:role/MyRole\"}, \"Action\": \"s3:GetObject\", \"Resource\": \"arn:aws:s3:::my-bucket/*\"}",
+          "result": "MyRole can GetObject even without s3 permissions in its identity-based policy"
+        }
+      ]
+    },
+    {
+      "rule_order": 4,
+      "rule_name": "Resource-Based Policies (Cross-Account)",
+      "description": "For cross-account access, resource-based policies require BOTH the trusting account's resource policy AND the trusted account's identity-based policy to allow the action. This is an INTERSECTION, not a union.",
+      "terraform_relevance": "Cross-account Terraform setups (e.g., shared S3 state bucket, cross-account role assumption) require policies on BOTH sides. A common pattern is aws_iam_role with assume_role_policy in the trusting account + aws_iam_policy in the trusted account.",
+      "common_mistakes": [
+        "Setting up a cross-account S3 bucket policy but forgetting to add permissions to the accessing role's identity-based policy",
+        "Confusing same-account union semantics with cross-account intersection semantics",
+        "Not testing cross-account access because LocalStack doesn't model multi-account"
+      ],
+      "examples": [
+        {
+          "scenario": "Cross-account S3 access requires both policies",
+          "policy": "Account B bucket policy allows Account A role + Account A role policy allows s3:GetObject on Account B bucket",
+          "result": "Access works only when BOTH policies are in place"
+        }
+      ]
+    },
+    {
+      "rule_order": 5,
+      "rule_name": "Permissions Boundaries",
+      "description": "If a permissions boundary is attached to the IAM entity, the effective permissions are the INTERSECTION of the identity-based policy and the permissions boundary. The boundary cannot grant access — it only limits it.",
+      "terraform_relevance": "Set via permissions_boundary argument on aws_iam_role or aws_iam_user. A common footgun: attaching a permissions boundary after resources are already created can break existing access. Terraform plan will show no changes to the role, but access patterns change.",
+      "common_mistakes": [
+        "Attaching a boundary that doesn't include permissions the role already uses — breaks existing functionality with no Terraform diff",
+        "Forgetting that boundaries must explicitly allow every action in the identity-based policy",
+        "Using aws_iam_role with permissions_boundary but not testing the intersection"
+      ],
+      "examples": [
+        {
+          "scenario": "Boundary restricts admin role",
+          "policy": "Role has AdministratorAccess but boundary only allows s3:* and ec2:*",
+          "result": "Role can only perform S3 and EC2 actions despite having AdministratorAccess"
+        }
+      ]
+    },
+    {
+      "rule_order": 6,
+      "rule_name": "Session Policies",
+      "description": "When assuming a role with session policies (via STS AssumeRole), the effective permissions are the INTERSECTION of the role's identity-based policies AND the session policy. Session policies further restrict, never expand.",
+      "terraform_relevance": "Relevant when using assume_role blocks in the AWS provider configuration with session_name. Also affects terraform state operations when using assumed roles. The provider's assume_role block doesn't pass session policies by default, but custom STS calls in provisioners might.",
+      "common_mistakes": [
+        "Passing an overly restrictive session policy when assuming a role for Terraform operations",
+        "Not realizing that AWS SSO/Identity Center passes session policies that may restrict Terraform operations",
+        "Debugging AccessDenied without checking if session policies are in effect"
+      ],
+      "examples": [
+        {
+          "scenario": "Session policy restricts assumed role",
+          "policy": "Role allows s3:* but session policy only allows s3:GetObject",
+          "result": "s3:PutObject fails during the session despite role permissions"
+        }
+      ]
+    },
+    {
+      "rule_order": 7,
+      "rule_name": "Identity-Based Policies",
+      "description": "Standard IAM policies attached to users, groups, or roles. Evaluated after all restrictive layers. The UNION of all attached identity-based policies determines what actions are allowed (subject to boundaries, SCPs, and explicit denies).",
+      "terraform_relevance": "Managed via aws_iam_policy + aws_iam_role_policy_attachment (managed policies) or aws_iam_role_policy (inline policies). Multiple policy attachments form a union. The 10-managed-policy limit per role is a common constraint.",
+      "common_mistakes": [
+        "Exceeding the 10-managed-policy attachment limit per role — Terraform apply fails with LimitExceeded",
+        "Using aws_iam_role_policy (inline) when aws_iam_policy + attachment is better for reuse",
+        "Creating duplicate policies instead of sharing — hits account-level policy limits",
+        "Not realizing that inline policies (aws_iam_role_policy) and managed policies (aws_iam_role_policy_attachment) are evaluated as a union"
+      ],
+      "examples": [
+        {
+          "scenario": "Multiple policies form union",
+          "policy": "Policy A allows s3:GetObject, Policy B allows s3:PutObject",
+          "result": "Role can perform both GetObject and PutObject"
+        }
+      ]
+    },
+    {
+      "rule_order": 8,
+      "rule_name": "Default Deny",
+      "description": "If no policy explicitly allows the action after all evaluation steps, the request is denied. IAM is deny-by-default.",
+      "terraform_relevance": "A new aws_iam_role with no attached policies can authenticate but cannot do anything. Terraform apply will fail with AccessDenied for every resource operation. Common when bootstrapping — the role needs policies BEFORE Terraform can use it.",
+      "common_mistakes": [
+        "Creating a role and immediately trying to use it in the same Terraform apply without proper depends_on",
+        "Assuming a role has permissions because it exists — empty roles have zero permissions",
+        "Forgetting to attach a policy after creating it — aws_iam_policy without aws_iam_role_policy_attachment does nothing"
+      ],
+      "examples": [
+        {
+          "scenario": "Role with no policies",
+          "policy": "aws_iam_role created with assume_role_policy but no permission policies attached",
+          "result": "All API calls return AccessDenied"
+        }
+      ]
+    },
+    {
+      "rule_order": 9,
+      "rule_name": "NotAction and NotResource",
+      "description": "NotAction in an Allow statement grants access to ALL actions EXCEPT the listed ones. NotAction in a Deny statement denies ALL actions EXCEPT the listed ones. NotResource follows the same inversion logic. These are powerful but frequently misunderstood.",
+      "terraform_relevance": "Terraform aws_iam_policy_document data source supports not_actions and not_resources blocks. Misuse leads to overly permissive policies that pass tfsec checks because the intent looks restrictive.",
+      "common_mistakes": [
+        "Using NotAction with Allow thinking it denies those actions — it actually allows everything else",
+        "Combining NotAction + NotResource in ways that create unintended broad permissions",
+        "Not realizing NotAction: ['iam:*'] with Allow grants access to EVERY other AWS service"
+      ],
+      "examples": [
+        {
+          "scenario": "NotAction misunderstanding",
+          "policy": "{\"Effect\": \"Allow\", \"NotAction\": \"iam:*\", \"Resource\": \"*\"}",
+          "result": "Grants access to ALL AWS services EXCEPT IAM — often unintentionally broad"
+        }
+      ]
+    },
+    {
+      "rule_order": 10,
+      "rule_name": "Resource Control Policies (RCPs)",
+      "description": "RCPs set maximum permissions on resources within an Organization. Like SCPs but for resources instead of principals. They restrict what actions can be performed ON resources regardless of who is performing them.",
+      "terraform_relevance": "A newer Organizations feature. Can block Terraform operations on resources even when the principal has full permissions. Not yet widely adopted but relevant for organizations with strict data perimeter requirements.",
+      "common_mistakes": [
+        "Not checking for RCPs when debugging AccessDenied in an Organization account",
+        "Confusing RCPs with resource-based policies — RCPs are set at the Organization level, not on individual resources",
+        "Not realizing RCPs are still a relatively new feature with limited service support"
+      ],
+      "examples": [
+        {
+          "scenario": "RCP blocks S3 access",
+          "policy": "RCP denies s3:PutObject unless aws:PrincipalOrgID matches",
+          "result": "External principals cannot write to S3 buckets in the org, even with bucket policy allows"
+        }
+      ]
+    }
+  ],
+  "interaction_rules": [
+    {
+      "rule_name": "Same-Account Resource Policy Union",
+      "description": "Within the same account, identity-based and resource-based policies form a UNION. An Allow in either grants access.",
+      "implication": "Removing an IAM policy doesn't necessarily revoke access if a resource-based policy also allows the action.",
+      "terraform_relevance": "When doing `terraform destroy` on an IAM module, resource-based policies on S3/SQS/KMS may still reference the deleted principal — causes orphaned policy statements but not security issues.",
+      "affected_resources": [
+        "aws_s3_bucket_policy",
+        "aws_sqs_queue_policy",
+        "aws_kms_key",
+        "aws_sns_topic_policy"
+      ]
+    },
+    {
+      "rule_name": "Cross-Account Intersection Requirement",
+      "description": "Cross-account access requires BOTH the resource-based policy in the target account AND identity-based policy in the source account. This is an INTERSECTION.",
+      "implication": "Setting up cross-account access always requires two Terraform configurations or a multi-provider setup.",
+      "terraform_relevance": "Use provider aliases with assume_role for cross-account resources. The aws_iam_role assume_role_policy (trust policy) controls who can assume the role — this is a resource-based policy on the role itself.",
+      "affected_resources": [
+        "aws_iam_role",
+        "aws_s3_bucket_policy",
+        "aws_kms_key"
+      ]
+    },
+    {
+      "rule_name": "KMS Key Policy Mandatory Grant",
+      "description": "Unlike all other AWS services, KMS requires the key policy to grant access. IAM policies alone are insufficient. The key policy must either grant access directly or delegate to IAM.",
+      "implication": "The default key policy includes a statement allowing the account root to manage the key via IAM. If you override the key policy and omit this, even account admins lose access.",
+      "terraform_relevance": "aws_kms_key with a custom policy that doesn't include the root account delegation statement can lock everyone out. Recovery requires AWS support. Always include the 'Enable IAM policies' statement.",
+      "affected_resources": [
+        "aws_kms_key",
+        "aws_kms_alias",
+        "aws_kms_grant"
+      ]
+    },
+    {
+      "rule_name": "Trust Policy vs Permission Policy",
+      "description": "A role's assume_role_policy (trust policy) controls WHO can assume the role. The role's permission policies control WHAT the role can do once assumed. These are independent evaluations.",
+      "implication": "A role can be assumable by anyone but have no permissions, or have full admin but be assumable by no one.",
+      "terraform_relevance": "aws_iam_role.assume_role_policy is the trust policy (who). aws_iam_role_policy / aws_iam_role_policy_attachment are permission policies (what). Confusing these is the #1 IAM Terraform mistake.",
+      "affected_resources": [
+        "aws_iam_role",
+        "aws_iam_role_policy",
+        "aws_iam_role_policy_attachment"
+      ]
+    },
+    {
+      "rule_name": "Policy Size Limits",
+      "description": "IAM policies have size limits: 6,144 characters for inline policies, 6,144 for managed policies. Trust policies are limited to 2,048 characters (expandable to 4,096).",
+      "implication": "Complex policies that reference many resources or use many conditions can hit size limits silently during Terraform apply.",
+      "terraform_relevance": "Terraform aws_iam_policy_document data source doesn't validate size. The error only appears during apply: 'LimitExceeded: Cannot exceed quota for PolicySize'. Split large policies across multiple aws_iam_policy resources.",
+      "affected_resources": [
+        "aws_iam_policy",
+        "aws_iam_role_policy",
+        "aws_iam_role"
+      ]
+    },
+    {
+      "rule_name": "IAM Eventual Consistency",
+      "description": "IAM is a global service with eventual consistency. Policy changes can take seconds to minutes to propagate across all AWS regions and endpoints.",
+      "implication": "Terraform apply may succeed but subsequent resource operations using the new policy may fail with AccessDenied. Retrying after a delay resolves it.",
+      "terraform_relevance": "Common when creating an IAM role and immediately using it: aws_iam_role → aws_ecs_task_definition. Add depends_on and consider a time_sleep resource (aws_iam_role_policy_attachment → time_sleep → aws_ecs_service).",
+      "affected_resources": [
+        "aws_iam_role",
+        "aws_iam_policy",
+        "aws_iam_role_policy_attachment",
+        "aws_iam_instance_profile"
+      ]
+    },
+    {
+      "rule_name": "Wildcard Principal Risks",
+      "description": "Using Principal: '*' or Principal: {AWS: '*'} in resource-based policies grants access to ANY AWS account's principals. This is rarely intentional except for public S3 buckets.",
+      "implication": "tfsec and AWS Config will flag this. Terraform apply succeeds but creates a public access vector.",
+      "terraform_relevance": "In aws_iam_policy_document, principals { type = 'AWS' identifiers = ['*'] } creates this. Use specific account IDs or aws:PrincipalOrgID condition to restrict.",
+      "affected_resources": [
+        "aws_s3_bucket_policy",
+        "aws_sqs_queue_policy",
+        "aws_sns_topic_policy",
+        "aws_kms_key"
+      ]
+    },
+    {
+      "rule_name": "Service-Linked Roles Cannot Be Modified",
+      "description": "AWS service-linked roles (e.g., AWSServiceRoleForECS) are managed by AWS. You cannot modify their permissions via Terraform.",
+      "implication": "Attempting to import or manage a service-linked role via aws_iam_role will fail or cause drift.",
+      "terraform_relevance": "Use aws_iam_service_linked_role to create them, but don't try to attach policies. Let AWS manage the permissions. If the role already exists, use a data source or skip creation with create_before_destroy lifecycle.",
+      "affected_resources": [
+        "aws_iam_service_linked_role"
+      ]
+    }
+  ]
+}

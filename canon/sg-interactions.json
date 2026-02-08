@@ -1,0 +1,268 @@
+{
+  "_meta": {
+    "source": "terraform-aws-boid Canon — sourced from GitHub issues, AWS docs, and Terraform operational experience",
+    "version": "0.2.0",
+    "date": "2026-02-08",
+    "description": "Security group interaction patterns — circular dependencies, rule ordering, inline vs standalone conflicts, and Terraform-specific gotchas.",
+    "schema": {
+      "pattern_name": "Name of the interaction pattern",
+      "description": "What the pattern is and why it matters",
+      "symptom": "How this manifests as an error or unexpected behavior",
+      "root_cause": "The underlying Terraform/AWS interaction causing it",
+      "solution": "The canonical solution",
+      "terraform_resources": "Resources involved",
+      "tags": "Categorization tags"
+    }
+  },
+  "patterns": [
+    {
+      "pattern_name": "Inline vs Standalone Rule Conflict",
+      "description": "Using both inline ingress/egress blocks in aws_security_group AND separate aws_security_group_rule or aws_vpc_security_group_*_rule resources for the same SG causes perpetual diffs and rule flapping.",
+      "symptom": "terraform plan always shows changes. Rules appear and disappear on consecutive applies. 'SecurityGroupRuleAlreadyExists' or rules being deleted and recreated.",
+      "root_cause": "Terraform manages inline rules as part of the SG resource lifecycle. Standalone rules are separate resources. Both try to own the same rules, causing conflict during refresh.",
+      "solution": "Never mix inline and standalone rules for the same security group. Choose one style per SG. Preferred: use standalone aws_vpc_security_group_ingress_rule / aws_vpc_security_group_egress_rule (the newer resources) with no inline blocks.",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule",
+        "aws_vpc_security_group_egress_rule"
+      ],
+      "tags": [
+        "rule-conflict",
+        "perpetual-diff",
+        "inline-vs-standalone"
+      ]
+    },
+    {
+      "pattern_name": "Mutual Security Group Reference Cycle",
+      "description": "Two security groups that reference each other in their rules create a circular dependency that Terraform cannot resolve in a single apply.",
+      "symptom": "Error: Cycle: aws_security_group.a, aws_security_group.b. Or perpetual diffs where plan always shows changes after apply.",
+      "root_cause": "When SG-A has an inline ingress referencing SG-B, and SG-B has an inline ingress referencing SG-A, Terraform sees a dependency cycle. Both SGs must exist before either can be fully configured.",
+      "solution": "Use standalone rule resources (aws_security_group_rule or aws_vpc_security_group_ingress_rule) instead of inline rules. Create SGs with empty ingress/egress blocks, then add rules as separate resources that depend_on the SGs.",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_security_group_rule"
+      ],
+      "tags": [
+        "cycle",
+        "circular-dependency",
+        "depends-on"
+      ],
+      "references": [
+        "https://github.com/hashicorp/terraform-provider-aws/issues/8170"
+      ]
+    },
+    {
+      "pattern_name": "Security Group Self-Reference",
+      "description": "A security group rule that references its own SG as the source/destination. Common for cluster communication (e.g., ECS tasks talking to each other).",
+      "symptom": "Cycle error if using inline rules. With standalone rules it works but can cause confusion during destroy.",
+      "root_cause": "An inline self-referencing rule creates a dependency on the SG's own ID, which doesn't exist until the SG is created. Standalone rules resolve this because the SG is created first.",
+      "solution": "Always use standalone rule resources for self-referencing rules. Example: aws_vpc_security_group_ingress_rule with security_group_id = referenced_security_group_id = aws_security_group.cluster.id",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_vpc_security_group_ingress_rule"
+      ],
+      "tags": [
+        "self-reference",
+        "cluster",
+        "cycle"
+      ]
+    },
+    {
+      "pattern_name": "Default Egress Rule Conflict",
+      "description": "AWS automatically creates a default egress rule (allow all outbound) when a SG is created. If Terraform also specifies egress rules, the default rule may conflict.",
+      "symptom": "Perpetual diff showing egress rule changes. Or unexpected 'allow all' egress rule appearing in plan.",
+      "root_cause": "By default, aws_security_group creates the AWS default egress rule. If you specify egress blocks, Terraform revokes the default and applies yours. But if egress = [] (empty), Terraform leaves the default in place and doesn't manage egress.",
+      "solution": "Explicitly manage egress rules. Either: (1) include egress blocks in the SG, or (2) use revoke_rules_on_delete = true and manage via standalone resources. Never leave egress ambiguous.",
+      "terraform_resources": [
+        "aws_security_group"
+      ],
+      "tags": [
+        "egress",
+        "default-rule",
+        "perpetual-diff"
+      ]
+    },
+    {
+      "pattern_name": "revoke_rules_on_delete Behavior",
+      "description": "The revoke_rules_on_delete argument on aws_security_group controls whether Terraform revokes all rules before deleting the SG. Without it, deletion may fail if other SGs reference this one.",
+      "symptom": "Error deleting security group: DependencyViolation: resource sg-xxxx has a dependent object. Terraform destroy hangs or fails.",
+      "root_cause": "AWS prevents deleting a SG that is referenced by rules in other SGs. Terraform must revoke those rules first. Without revoke_rules_on_delete = true, Terraform doesn't attempt this.",
+      "solution": "Set revoke_rules_on_delete = true on security groups that might be referenced by other SGs. This ensures clean deletion. Note: this adds API calls during destroy.",
+      "terraform_resources": [
+        "aws_security_group"
+      ],
+      "tags": [
+        "delete",
+        "dependency-violation",
+        "destroy"
+      ]
+    },
+    {
+      "pattern_name": "Max Rules Per Security Group",
+      "description": "AWS limits the number of inbound and outbound rules per SG (default: 60 inbound, 60 outbound). The product of rules × SGs per ENI is also limited (default: 300).",
+      "symptom": "Error: RulesPerSecurityGroupLimitExceeded. Terraform apply fails when adding the Nth rule.",
+      "root_cause": "AWS enforces per-SG rule limits and per-ENI rule-times-SG limits. These are soft limits but the defaults are surprisingly low for complex applications.",
+      "solution": "Consolidate CIDR blocks into single rules where possible. Use prefix lists (aws_ec2_managed_prefix_list) to group CIDRs. Request limit increases via AWS Service Quotas. Monitor rule counts in Terraform outputs.",
+      "terraform_resources": [
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule",
+        "aws_ec2_managed_prefix_list"
+      ],
+      "tags": [
+        "limits",
+        "rules-per-sg",
+        "prefix-list"
+      ]
+    },
+    {
+      "pattern_name": "Security Group Rule Ordering Non-Determinism",
+      "description": "AWS security group rules have no ordering — they are all evaluated simultaneously. But Terraform creates them sequentially, which can cause brief windows of misconfiguration.",
+      "symptom": "Intermittent connectivity issues during terraform apply. Brief periods where some rules are applied but others are not.",
+      "root_cause": "Terraform applies SG rules one at a time via API calls. Between the first and last API call, the SG is in a partially-configured state. AWS evaluates all rules simultaneously once applied.",
+      "solution": "For critical infrastructure, use create_before_destroy on the entire SG and create a new SG with all rules before destroying the old one. Or accept the brief window for non-production.",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_security_group_rule"
+      ],
+      "tags": [
+        "ordering",
+        "race-condition",
+        "create-before-destroy"
+      ]
+    },
+    {
+      "pattern_name": "Stale Security Group Reference After Destroy",
+      "description": "Destroying a security group that is referenced in another SG's rules leaves stale references. The referencing rules become invalid but may not be cleaned up.",
+      "symptom": "Terraform state shows rules referencing a SG that no longer exists. Plan shows changes to remove stale rules. In extreme cases, AWS API errors on refresh.",
+      "root_cause": "AWS allows rules to reference SGs in the same VPC. If the referenced SG is deleted outside Terraform (or by Terraform in wrong order), the rule becomes stale.",
+      "solution": "Use depends_on to ensure rules are destroyed before their referenced SGs. Or use revoke_rules_on_delete on the referenced SG. Consider lifecycle { create_before_destroy = true } for SGs that are frequently recreated.",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_security_group_rule"
+      ],
+      "tags": [
+        "stale-reference",
+        "destroy-order",
+        "depends-on"
+      ]
+    },
+    {
+      "pattern_name": "Cross-VPC Security Group Reference",
+      "description": "SG rules can only reference SGs within the same VPC (or peered VPCs). Referencing a SG from a different, non-peered VPC silently fails.",
+      "symptom": "InvalidGroup.NotFound or InvalidParameterValue during terraform apply. Error message mentions the SG ID but doesn't explain the VPC boundary issue.",
+      "root_cause": "AWS requires SGs referenced in rules to be in the same VPC or a peered VPC. The error message doesn't clearly state this. Common when refactoring infrastructure across VPCs.",
+      "solution": "Use CIDR blocks instead of SG references for cross-VPC rules. Or establish VPC peering first, then reference SGs. Verify SG VPC membership in Terraform using data sources.",
+      "terraform_resources": [
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule",
+        "aws_vpc_peering_connection"
+      ],
+      "tags": [
+        "cross-vpc",
+        "peering",
+        "invalid-reference"
+      ]
+    },
+    {
+      "pattern_name": "Security Group Name vs Name Tag",
+      "description": "AWS security groups have a 'group name' (immutable after creation) and a Name tag (mutable). Terraform's name argument sets the group name, not the tag.",
+      "symptom": "Force replacement (destroy + recreate) when changing the name argument. Unexpected SG deletion during plan. Or confusion between name and tags.Name in data lookups.",
+      "root_cause": "The AWS API GroupName is set at creation time and cannot be changed. Changing name in Terraform forces a new resource. The Name tag is a separate, mutable attribute.",
+      "solution": "Use name_prefix instead of name for SGs that may need recreation (enables create_before_destroy). Set the display name via tags = { Name = '...' }. Use data.aws_security_group with filter on tag:Name for lookups.",
+      "terraform_resources": [
+        "aws_security_group"
+      ],
+      "tags": [
+        "naming",
+        "force-replacement",
+        "name-prefix"
+      ]
+    },
+    {
+      "pattern_name": "Default VPC Security Group Management",
+      "description": "Every VPC has a default security group that cannot be deleted. It can only be managed by importing it into Terraform via aws_default_security_group.",
+      "symptom": "Cannot delete default security group via Terraform. Or unmanaged default SG allows all traffic within the SG (AWS default behavior), which is a security risk.",
+      "root_cause": "AWS creates a default SG per VPC that allows all inbound from members of the same SG and all outbound. It cannot be deleted, only modified. Terraform's aws_security_group resource cannot manage it.",
+      "solution": "Use aws_default_security_group to import and restrict the default SG. Best practice: import it and set ingress = [] and egress = [] to lock it down. This is a CIS Benchmark requirement.",
+      "terraform_resources": [
+        "aws_default_security_group",
+        "aws_vpc"
+      ],
+      "tags": [
+        "default-sg",
+        "security",
+        "cis-benchmark"
+      ]
+    },
+    {
+      "pattern_name": "Security Group Description Immutability",
+      "description": "The description field on AWS security group rules is immutable after creation. Changing it in Terraform forces rule replacement.",
+      "symptom": "Terraform plan shows rule destroy+recreate for a description-only change. Brief connectivity gap during apply.",
+      "root_cause": "The AWS API does not support updating security group rule descriptions in-place. Any change requires deleting and recreating the rule.",
+      "solution": "Set descriptions correctly on first creation. For critical rules, consider wrapping in lifecycle { create_before_destroy = true } to minimize downtime. Or accept that description changes cause brief rule removal.",
+      "terraform_resources": [
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule",
+        "aws_vpc_security_group_egress_rule"
+      ],
+      "tags": [
+        "description",
+        "immutable",
+        "force-replacement"
+      ]
+    },
+    {
+      "pattern_name": "IPv6 Rule Duplication",
+      "description": "When creating SGs with dual-stack (IPv4 + IPv6) support, rules must be created for both address families. Terraform doesn't auto-duplicate rules for both stacks.",
+      "symptom": "IPv6 traffic blocked because only IPv4 rules were created. Or double the expected rule count hitting per-SG limits.",
+      "root_cause": "AWS treats IPv4 CIDR (cidr_blocks) and IPv6 CIDR (ipv6_cidr_blocks) as separate rule properties. A rule with 0.0.0.0/0 does not cover ::/0.",
+      "solution": "Create paired rules for both address families. Use locals to define rule sets and for_each to generate both IPv4 and IPv6 variants. Or use prefix lists that include both address families.",
+      "terraform_resources": [
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule"
+      ],
+      "tags": [
+        "ipv6",
+        "dual-stack",
+        "rule-duplication"
+      ]
+    },
+    {
+      "pattern_name": "Timeout During Security Group Deletion",
+      "description": "Deleting a security group can timeout if ENIs are still attached. Common with Lambda, ECS, and ELB resources that create ENIs referencing the SG.",
+      "symptom": "Error: timeout while waiting for security group to be deleted. Or DependencyViolation: resource has a dependent object (network interface).",
+      "root_cause": "AWS services create ENIs (Elastic Network Interfaces) that reference SGs. These ENIs must be deleted first, but Lambda and ECS may retain ENIs for minutes after the service resource is destroyed.",
+      "solution": "Increase the delete timeout on aws_security_group (default: 15m). Ensure dependent resources (Lambda, ECS, ELB) are destroyed before the SG via depends_on. For Lambda, the ENI cleanup can take up to 45 minutes.",
+      "terraform_resources": [
+        "aws_security_group",
+        "aws_lambda_function",
+        "aws_ecs_service",
+        "aws_lb"
+      ],
+      "tags": [
+        "timeout",
+        "delete",
+        "eni",
+        "lambda"
+      ]
+    },
+    {
+      "pattern_name": "for_each vs count for Security Group Rules",
+      "description": "Using count for dynamic SG rules causes index-based issues when rules are added or removed from the middle of a list. for_each with meaningful keys is more stable.",
+      "symptom": "Adding or removing a rule causes unrelated rules to be destroyed and recreated (index shift). Brief connectivity gaps for rules that haven't changed.",
+      "root_cause": "count creates resources indexed by position (0, 1, 2...). Removing item at index 1 shifts items 2+ down. for_each creates resources keyed by a stable identifier.",
+      "solution": "Use for_each with a map or set keyed by a stable identifier (e.g., description or a composite of port+cidr). Example: for_each = { for rule in var.rules : \"${rule.port}-${rule.cidr}\" => rule }",
+      "terraform_resources": [
+        "aws_security_group_rule",
+        "aws_vpc_security_group_ingress_rule"
+      ],
+      "tags": [
+        "for-each",
+        "count",
+        "index-shift",
+        "best-practice"
+      ]
+    }
+  ]
+}

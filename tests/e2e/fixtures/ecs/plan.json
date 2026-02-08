@@ -1,0 +1,178 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "planned_values": {},
+  "resource_changes": [
+    {
+      "address": "aws_ecs_cluster.main",
+      "type": "aws_ecs_cluster",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-cluster",
+          "setting": [{"name": "containerInsights", "value": "enabled"}],
+          "tags": {"Name": "boid-demo-cluster"}
+        }
+      }
+    },
+    {
+      "address": "aws_cloudwatch_log_group.app",
+      "type": "aws_cloudwatch_log_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "/ecs/boid-demo",
+          "retention_in_days": 14
+        }
+      }
+    },
+    {
+      "address": "aws_ecs_task_definition.app",
+      "type": "aws_ecs_task_definition",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "family": "boid-demo-app",
+          "network_mode": "awsvpc",
+          "requires_compatibilities": ["FARGATE"],
+          "cpu": "256",
+          "memory": "512"
+        }
+      }
+    },
+    {
+      "address": "aws_ecs_service.app",
+      "type": "aws_ecs_service",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-service",
+          "desired_count": 2,
+          "launch_type": "FARGATE",
+          "health_check_grace_period_seconds": 0
+        }
+      }
+    },
+    {
+      "address": "aws_lb.app",
+      "type": "aws_lb",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-alb",
+          "internal": false,
+          "load_balancer_type": "application",
+          "tags": {"Name": "boid-demo-alb"}
+        }
+      }
+    },
+    {
+      "address": "aws_lb_target_group.app",
+      "type": "aws_lb_target_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-tg",
+          "port": 80,
+          "protocol": "HTTP",
+          "target_type": "ip"
+        }
+      }
+    },
+    {
+      "address": "aws_lb_listener.app",
+      "type": "aws_lb_listener",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "port": 80,
+          "protocol": "HTTP"
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.alb",
+      "type": "aws_security_group",
+      "name": "alb",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-alb-sg",
+          "description": "ALB security group",
+          "ingress": [
+            {"from_port": 80, "to_port": 80, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"]}
+          ],
+          "egress": [
+            {"from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}
+          ]
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.ecs",
+      "type": "aws_security_group",
+      "name": "ecs",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-ecs-sg",
+          "description": "ECS tasks security group",
+          "ingress": [
+            {"from_port": 80, "to_port": 80, "protocol": "tcp", "security_groups": ["sg-alb"]}
+          ],
+          "egress": [
+            {"from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}
+          ]
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "summary": "Error waiting for ECS service to reach a steady state: health check failure",
+      "detail": "The ECS service boid-demo-service is unable to reach a steady state because tasks are failing health checks. The health_check_grace_period_seconds is set to 0, which means health checks begin immediately before the container has time to start.",
+      "address": "aws_ecs_service.app"
+    },
+    {
+      "severity": "warning",
+      "summary": "Error creating ALB: ValidationError: At least two subnets in two different Availability Zones must be specified",
+      "detail": "Application Load Balancers require subnets in at least 2 different Availability Zones.",
+      "address": "aws_lb.app"
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "version_constraint": "~> 5.0"
+      }
+    }
+  }
+}

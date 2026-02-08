@@ -1,0 +1,719 @@
+{
+  "_meta": {
+    "source": "terraform-aws-boid Canon — sourced from GitHub issues, provider CHANGELOG, and operational experience",
+    "version": "0.2.0",
+    "date": "2026-02-08",
+    "description": "Error message signatures mapped to root causes and fixes. Each entry captures a known Terraform+AWS error pattern, its root cause, and the canonical fix.",
+    "schema": {
+      "error_pattern": "Regex or substring that matches the error message",
+      "provider": "AWS provider or terraform core",
+      "resource": "Terraform resource type that triggers this error",
+      "root_cause": "Why this error actually happens (the non-obvious part)",
+      "fix": "The canonical fix",
+      "severity": "critical | high | medium | low",
+      "tags": "Categorization tags"
+    }
+  },
+  "signatures": [
+    {
+      "error_pattern": "Provider produced inconsistent final plan",
+      "provider": "aws",
+      "resource": "multiple",
+      "root_cause": "AWS API returns different values on read than what was written. Common with tags_all (provider-default tags merged after apply), computed attributes that change between plan and apply, or eventual consistency where the API read returns stale data.",
+      "fix": "For tags_all: ensure provider default_tags match what you expect. For computed attributes: use ignore_changes on the drifting attribute. For eventual consistency: re-run apply — it usually succeeds on retry.",
+      "severity": "high",
+      "tags": [
+        "inconsistent-plan",
+        "tags-all",
+        "eventual-consistency",
+        "provider-bug"
+      ]
+    },
+    {
+      "error_pattern": "does not have a package available for your current platform",
+      "provider": "terraform",
+      "resource": "provider",
+      "root_cause": "The provider version you specified doesn't have a binary built for your OS/architecture combination. Common when: (1) using a very new provider version that hasn't published all platform binaries yet, (2) running on ARM (M1/M2 Mac) with an older provider version, (3) lock file references a version from a different platform.",
+      "fix": "Delete .terraform.lock.hcl and run terraform init again. Or pin to a version that supports your platform. For M1 Mac: ensure provider version >= the ARM build date (most providers after late 2021).",
+      "severity": "high",
+      "tags": [
+        "platform",
+        "init",
+        "lock-file",
+        "arm"
+      ]
+    },
+    {
+      "error_pattern": "FinalSnapshotIdentifier is required when a final snapshot is required",
+      "provider": "aws",
+      "resource": "aws_rds_cluster",
+      "root_cause": "skip_final_snapshot defaults to false. When destroying an RDS cluster without setting skip_final_snapshot = true or providing final_snapshot_identifier, AWS requires a snapshot name. The Terraform resource may not properly pass skip_final_snapshot during destroy.",
+      "fix": "Set skip_final_snapshot = true for non-production. For production: set final_snapshot_identifier to a unique name. Note: some provider versions have bugs where skip_final_snapshot is ignored — upgrade the provider.",
+      "severity": "medium",
+      "tags": [
+        "rds",
+        "destroy",
+        "snapshot",
+        "lifecycle"
+      ]
+    },
+    {
+      "error_pattern": "Error deleting (security group|Security Group).*DependencyViolation",
+      "provider": "aws",
+      "resource": "aws_security_group",
+      "root_cause": "The security group is still referenced by ENIs (network interfaces) from Lambda functions, ECS tasks, ELBs, or other SGs' rules. AWS prevents deletion until all references are removed. Lambda ENI cleanup can take up to 45 minutes.",
+      "fix": "Ensure dependent resources are destroyed first via depends_on. For Lambda: wait for ENI cleanup (increase SG delete timeout to 45m). Set revoke_rules_on_delete = true to remove cross-SG references. Use targeted destroy: terraform destroy -target=aws_lambda_function.x first.",
+      "severity": "high",
+      "tags": [
+        "security-group",
+        "dependency",
+        "destroy",
+        "eni",
+        "lambda"
+      ]
+    },
+    {
+      "error_pattern": "Error creating Lambda function.*InvalidParameterValueException.*The role defined for the function cannot be assumed by Lambda",
+      "provider": "aws",
+      "resource": "aws_lambda_function",
+      "root_cause": "IAM eventual consistency. The IAM role was just created and Lambda cannot assume it yet because the trust policy hasn't propagated to all AWS endpoints.",
+      "fix": "Add a time_sleep resource (5-10 seconds) between the IAM role creation and Lambda function creation. Or add depends_on to the Lambda function pointing to the role policy attachment, and retry the apply.",
+      "severity": "high",
+      "tags": [
+        "lambda",
+        "iam",
+        "eventual-consistency",
+        "trust-policy"
+      ]
+    },
+    {
+      "error_pattern": "network interfaces.*in-use.*preventing.*delet",
+      "provider": "aws",
+      "resource": "aws_security_group",
+      "root_cause": "Lambda, ECS, and other services create ENIs that reference security groups. These ENIs remain 'in-use' after the service resource is destroyed because AWS cleans them up asynchronously. The SG cannot be deleted until all ENIs are detached.",
+      "fix": "Increase the security group delete timeout (timeouts { delete = '45m' }). Destroy dependent Lambda/ECS resources first. As a last resort, use AWS CLI to manually detach ENIs: aws ec2 describe-network-interfaces --filters Name=group-id,Values=sg-xxx",
+      "severity": "high",
+      "tags": [
+        "eni",
+        "security-group",
+        "lambda",
+        "timeout",
+        "destroy"
+      ]
+    },
+    {
+      "error_pattern": "Cycle:.*aws_security_group",
+      "provider": "aws",
+      "resource": "aws_security_group",
+      "root_cause": "Two or more security groups reference each other in their inline ingress/egress blocks, creating a circular dependency that Terraform's graph builder cannot resolve.",
+      "fix": "Replace inline ingress/egress blocks with standalone aws_vpc_security_group_ingress_rule / aws_vpc_security_group_egress_rule resources. Create the SGs with empty rule blocks first, then add cross-referencing rules as separate resources.",
+      "severity": "high",
+      "tags": [
+        "cycle",
+        "security-group",
+        "circular-dependency"
+      ]
+    },
+    {
+      "error_pattern": "Error launching source instance.*InsufficientInstanceCapacity",
+      "provider": "aws",
+      "resource": "aws_instance",
+      "root_cause": "AWS doesn't have enough capacity for the requested instance type in the specified AZ. Common with GPU instances (p3, g4, p4), large instances, and in popular AZs during high-demand periods.",
+      "fix": "Try a different AZ by changing the subnet. Use a capacity reservation. Try a different instance type in the same family. For spot: use aws_spot_instance_request with multiple instance types. For ASG: specify multiple instance types in mixed_instances_policy.",
+      "severity": "medium",
+      "tags": [
+        "ec2",
+        "capacity",
+        "instance-type",
+        "az"
+      ]
+    },
+    {
+      "error_pattern": "EntityAlreadyExists",
+      "provider": "aws",
+      "resource": "aws_iam_role",
+      "root_cause": "The IAM entity (role, user, policy, instance profile) already exists in AWS but is not in Terraform state. Common after: (1) manual creation in console, (2) failed terraform destroy that partially succeeded, (3) another Terraform workspace managing the same resource.",
+      "fix": "Import the existing resource: terraform import aws_iam_role.x role-name. Or delete the existing resource manually if it's orphaned. Never use create_before_destroy on IAM roles with fixed names.",
+      "severity": "medium",
+      "tags": [
+        "iam",
+        "already-exists",
+        "import",
+        "state"
+      ]
+    },
+    {
+      "error_pattern": "no valid credential sources.*found",
+      "provider": "aws",
+      "resource": "provider",
+      "root_cause": "The AWS provider cannot find credentials. Evaluation order: (1) provider block static credentials, (2) environment variables (AWS_ACCESS_KEY_ID), (3) shared credentials file (~/.aws/credentials), (4) shared config file (~/.aws/config with profile), (5) EC2 instance metadata (IMDS), (6) ECS task role.",
+      "fix": "Check AWS_PROFILE and AWS_DEFAULT_PROFILE env vars. Verify ~/.aws/credentials exists and is readable. For SSO: run 'aws sso login' first. For assumed roles: check the source_profile chain. Run 'aws sts get-caller-identity' to verify credentials outside Terraform.",
+      "severity": "critical",
+      "tags": [
+        "credentials",
+        "auth",
+        "provider",
+        "sso"
+      ]
+    },
+    {
+      "error_pattern": "Error acquiring the state lock",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "Another Terraform process holds the state lock (S3+DynamoDB backend), or a previous process crashed without releasing the lock. The lock prevents concurrent state modifications.",
+      "fix": "Wait for the other process to finish. If crashed: terraform force-unlock LOCK_ID (get ID from the error message). Prevent: use -lock-timeout=5m to wait for locks. Never force-unlock if another process is actually running — you risk state corruption.",
+      "severity": "critical",
+      "tags": [
+        "state",
+        "lock",
+        "backend",
+        "dynamodb",
+        "concurrent"
+      ]
+    },
+    {
+      "error_pattern": "BucketAlreadyExists|BucketAlreadyOwnedByYou",
+      "provider": "aws",
+      "resource": "aws_s3_bucket",
+      "root_cause": "S3 bucket names are globally unique across all AWS accounts. The name is taken — either by your account (not in Terraform state) or another account entirely.",
+      "fix": "Use a unique prefix (account ID, org name). Import if you own it: terraform import aws_s3_bucket.x bucket-name. Use random_id or random_pet for unique suffixes. Never use generic names like 'logs' or 'data'.",
+      "severity": "medium",
+      "tags": [
+        "s3",
+        "naming",
+        "global-namespace",
+        "import"
+      ]
+    },
+    {
+      "error_pattern": "Error putting S3 (policy|notification|replication).*AccessDenied",
+      "provider": "aws",
+      "resource": "aws_s3_bucket_policy",
+      "root_cause": "S3 bucket policies require s3:PutBucketPolicy permission AND the policy document itself must not lock out the calling principal. If the policy is malformed or too restrictive, you can lock yourself out.",
+      "fix": "Check IAM permissions include s3:PutBucketPolicy. Ensure the policy document doesn't deny access to the Terraform principal. For S3 Block Public Access conflicts: check aws_s3_bucket_public_access_block settings. If locked out: use the account root user to fix the bucket policy.",
+      "severity": "high",
+      "tags": [
+        "s3",
+        "policy",
+        "access-denied",
+        "lockout"
+      ]
+    },
+    {
+      "error_pattern": "InvalidParameterValue.*not a valid subnet",
+      "provider": "aws",
+      "resource": "aws_instance",
+      "root_cause": "The subnet ID doesn't exist, is in a different VPC than expected, or is in an AZ that doesn't support the instance type. Also common when referencing a subnet that was just destroyed and recreated with a new ID.",
+      "fix": "Verify the subnet exists: data.aws_subnet. Check VPC association. Ensure subnet AZ supports the instance type. If using data sources, verify filters return the expected subnet. Add depends_on if the subnet is managed by Terraform.",
+      "severity": "medium",
+      "tags": [
+        "subnet",
+        "vpc",
+        "instance",
+        "invalid-parameter"
+      ]
+    },
+    {
+      "error_pattern": "UnauthorizedOperation.*encoded authorization failure message",
+      "provider": "aws",
+      "resource": "multiple",
+      "root_cause": "IAM denies the action but AWS encodes the actual reason. The encoded message must be decoded to find which specific permission is missing.",
+      "fix": "Decode the message: aws sts decode-authorization-message --encoded-message <message> | jq '.DecodedMessage | fromjson'. This reveals the exact action, resource, and conditions that were evaluated. Then add the missing permission to the IAM policy.",
+      "severity": "high",
+      "tags": [
+        "iam",
+        "authorization",
+        "debug",
+        "encoded-message"
+      ]
+    },
+    {
+      "error_pattern": "Error waiting for.*ECS service.*to reach a steady state",
+      "provider": "aws",
+      "resource": "aws_ecs_service",
+      "root_cause": "ECS tasks are failing to start or failing health checks. The service keeps trying to reach desired count but tasks crash or are killed. Common causes: wrong container image, missing secrets/env vars, health check path returns non-200, security group blocks health check port.",
+      "fix": "Check ECS task stopped reason: aws ecs describe-tasks. Check CloudWatch logs for the container. Verify the load balancer health check path, port, and protocol. Check security group allows traffic from the ALB. Increase health_check_grace_period_seconds (default 0 is too aggressive).",
+      "severity": "high",
+      "tags": [
+        "ecs",
+        "health-check",
+        "steady-state",
+        "timeout"
+      ]
+    },
+    {
+      "error_pattern": "Error creating ECS service.*ClusterNotFoundException",
+      "provider": "aws",
+      "resource": "aws_ecs_service",
+      "root_cause": "The ECS cluster doesn't exist or the cluster name/ARN is incorrect. Common when the cluster is in a different module and the reference is stale, or when using Fargate in a region that requires cluster capacity providers to be set up first.",
+      "fix": "Verify the cluster exists: aws ecs describe-clusters --clusters <name>. Use the cluster ARN instead of name for cross-account/cross-module references. Ensure the cluster resource has depends_on from the service. For Fargate: ensure FARGATE capacity provider is associated with the cluster.",
+      "severity": "medium",
+      "tags": [
+        "ecs",
+        "cluster",
+        "not-found",
+        "fargate"
+      ]
+    },
+    {
+      "error_pattern": "Error creating DB Instance.*DBSubnetGroupDoesNotCoverEnoughAZs",
+      "provider": "aws",
+      "resource": "aws_db_instance",
+      "root_cause": "RDS requires a DB subnet group that spans at least 2 AZs. The subnet group's subnets are all in the same AZ, or the VPC doesn't have subnets in enough AZs.",
+      "fix": "Add subnets in at least 2 AZs to the DB subnet group. Use data.aws_availability_zones to dynamically get AZ list. For aws_db_subnet_group, ensure subnet_ids come from at least 2 different AZs.",
+      "severity": "medium",
+      "tags": [
+        "rds",
+        "subnet",
+        "multi-az",
+        "vpc"
+      ]
+    },
+    {
+      "error_pattern": "InvalidDBInstanceState|InvalidDBClusterState",
+      "provider": "aws",
+      "resource": "aws_db_instance",
+      "root_cause": "The RDS instance is in a state that doesn't allow the requested modification (e.g., modifying while a backup is in progress, or modifying while a previous modification is pending). RDS modifications can take 10-30 minutes.",
+      "fix": "Wait for the current operation to complete. Check instance status: aws rds describe-db-instances. Use apply_immediately = true to avoid pending-reboot modifications stacking up. For destroy: wait until status is 'available'.",
+      "severity": "medium",
+      "tags": [
+        "rds",
+        "state",
+        "modification",
+        "pending"
+      ]
+    },
+    {
+      "error_pattern": "Error creating ALB.*ValidationError.*At least two subnets in two different Availability Zones",
+      "provider": "aws",
+      "resource": "aws_lb",
+      "root_cause": "Application and Network Load Balancers require subnets in at least 2 AZs. The subnets specified are in the same AZ or only one subnet was provided.",
+      "fix": "Provide subnets in at least 2 AZs. Use data.aws_subnets with filter to get all subnets of the right type. Ensure VPC has subnets in multiple AZs. For internal ALBs, ensure private subnets span 2+ AZs.",
+      "severity": "medium",
+      "tags": [
+        "alb",
+        "elb",
+        "subnet",
+        "multi-az"
+      ]
+    },
+    {
+      "error_pattern": "UnauthorizedOperation.*detach",
+      "provider": "aws",
+      "resource": "aws_network_interface",
+      "root_cause": "Attempting to detach a network interface that has no attachment. The provider sends a detach API call even when the ENI isn't attached, and AWS returns UnauthorizedOperation instead of a more helpful error.",
+      "fix": "Upgrade to latest AWS provider version (fixed in 5.x+). Verify ENI attachment status before detach operations. Add lifecycle { ignore_changes = [attachment] } if the ENI is managed externally.",
+      "severity": "medium",
+      "tags": [
+        "eni",
+        "detach",
+        "provider-bug",
+        "upgrade"
+      ]
+    },
+    {
+      "error_pattern": "NoSuchEntity.*updating.*iam_user",
+      "provider": "aws",
+      "resource": "aws_iam_user",
+      "root_cause": "When updating both the name and tags of an IAM user simultaneously, the provider tries to update tags on the old name after the rename. The old entity no longer exists.",
+      "fix": "Upgrade to latest AWS provider version. Workaround: change name and tags in separate applies. Or use lifecycle { create_before_destroy = true } to avoid in-place renames.",
+      "severity": "medium",
+      "tags": [
+        "iam",
+        "user",
+        "rename",
+        "provider-bug"
+      ]
+    },
+    {
+      "error_pattern": "panic.*global_secondary_index.*dynamic",
+      "provider": "aws",
+      "resource": "aws_dynamodb_table",
+      "root_cause": "Provider panics when global_secondary_index or its key_schema uses dynamic blocks. The provider's schema handling doesn't properly unwrap dynamic block results.",
+      "fix": "Upgrade to latest AWS provider version. Workaround: use static index definitions or generate the configuration with for_each at the resource level instead of dynamic blocks inside the resource.",
+      "severity": "high",
+      "tags": [
+        "dynamodb",
+        "panic",
+        "dynamic-block",
+        "provider-bug"
+      ]
+    },
+    {
+      "error_pattern": "auth_token_update_strategy.*requires.*auth_token",
+      "provider": "aws",
+      "resource": "aws_elasticache_replication_group",
+      "root_cause": "When migrating ElastiCache from AUTH token to RBAC, the provider incorrectly requires auth_token even when you're removing it. The migration path is AUTH → RBAC (remove token, add user groups).",
+      "fix": "Upgrade to latest AWS provider version. Workaround: remove auth_token and auth_token_update_strategy in the same apply, then add user_group_ids in a subsequent apply.",
+      "severity": "medium",
+      "tags": [
+        "elasticache",
+        "auth",
+        "migration",
+        "provider-bug"
+      ]
+    },
+    {
+      "error_pattern": "forced replacement.*valkey|redis.*engine.*version",
+      "provider": "aws",
+      "resource": "aws_elasticache_serverless_cache",
+      "root_cause": "Provider forces replacement (destroy + recreate) when upgrading Valkey versions or switching between Redis and Valkey engines, even though ElastiCache Serverless supports in-place upgrades.",
+      "fix": "Upgrade to latest AWS provider version. Workaround: use lifecycle { ignore_changes = [engine, major_engine_version] } and perform engine upgrades via AWS Console/CLI.",
+      "severity": "high",
+      "tags": [
+        "elasticache",
+        "serverless",
+        "upgrade",
+        "force-replace",
+        "provider-bug"
+      ]
+    },
+    {
+      "error_pattern": "Missing Resource Identity After Update",
+      "provider": "aws",
+      "resource": "multiple",
+      "root_cause": "Provider v6+ internal bug where the resource identity (ID) is lost after an update operation. The provider returns no identity to Terraform core, causing a cryptic error.",
+      "fix": "Upgrade to latest patch version of the provider. This is a provider framework bug, not a user configuration issue. Pin to a known-good version until the fix is released.",
+      "severity": "critical",
+      "tags": [
+        "provider-bug",
+        "identity",
+        "v6",
+        "regression"
+      ]
+    },
+    {
+      "error_pattern": "assertion failed.*arm_interval.*code fragment",
+      "provider": "aws",
+      "resource": "provider",
+      "root_cause": "Provider initialization crashes with an internal assertion error. Related to ARM architecture (Apple Silicon) or specific provider compilation issues. The provider binary is corrupted or incompatible.",
+      "fix": "Clear the provider cache: rm -rf .terraform/providers. Run terraform init -upgrade. If persists: check Terraform and provider versions are compatible. Try the previous provider patch version.",
+      "severity": "critical",
+      "tags": [
+        "init",
+        "crash",
+        "arm",
+        "provider-binary"
+      ]
+    },
+    {
+      "error_pattern": "Error creating ACM Certificate.*LimitExceededException",
+      "provider": "aws",
+      "resource": "aws_acm_certificate",
+      "root_cause": "ACM has a default limit of 2,500 certificates per account per region (was 20 in early versions). Hitting this during Terraform apply usually means orphaned certificates from previous failed deployments are not being cleaned up.",
+      "fix": "Delete unused certificates: aws acm list-certificates --certificate-statuses ISSUED INACTIVE | jq. Clean up with terraform state rm for orphaned state entries. Request limit increase via Service Quotas if legitimately needed.",
+      "severity": "medium",
+      "tags": [
+        "acm",
+        "certificate",
+        "limit",
+        "cleanup"
+      ]
+    },
+    {
+      "error_pattern": "Error creating Route53.*HostedZoneAlreadyExists",
+      "provider": "aws",
+      "resource": "aws_route53_zone",
+      "root_cause": "A Route53 hosted zone with the same name already exists. Multiple hosted zones with the same domain are allowed but Terraform may conflict if the existing zone wasn't imported. Common during environment recreation.",
+      "fix": "Import the existing zone: terraform import aws_route53_zone.x ZONE_ID. Or use the delegation_set_id to disambiguate. AWS does allow multiple hosted zones for the same domain — but usually you want one.",
+      "severity": "medium",
+      "tags": [
+        "route53",
+        "hosted-zone",
+        "already-exists",
+        "import"
+      ]
+    },
+    {
+      "error_pattern": "Error creating CloudWatch Log Group.*ResourceAlreadyExistsException",
+      "provider": "aws",
+      "resource": "aws_cloudwatch_log_group",
+      "root_cause": "The log group already exists in AWS. Common because many AWS services auto-create log groups (Lambda creates /aws/lambda/<fn-name>, ECS creates from log configuration). Terraform fails because it tries to create what already exists.",
+      "fix": "Import the existing log group: terraform import aws_cloudwatch_log_group.x /aws/lambda/my-function. Or create the log group BEFORE the Lambda/ECS resource using depends_on. Or skip_destroy = true on the resource if the log group is managed externally.",
+      "severity": "medium",
+      "tags": [
+        "cloudwatch",
+        "logs",
+        "already-exists",
+        "lambda",
+        "import"
+      ]
+    },
+    {
+      "error_pattern": "The \"count\" value depends on resource attributes that cannot be determined until apply",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "Using count (or for_each) with a value that comes from a resource that hasn't been created yet. Terraform must know count at plan time, but the value depends on an apply-time output. Classic: count = length(aws_subnet.private[*].id) where subnets don't exist yet.",
+      "fix": "Use a variable or local for the count value instead of computed attributes. Or use -target to create the dependency first. In Terraform 1.5+, for_each can sometimes work where count cannot if the keys are known at plan time.",
+      "severity": "high",
+      "tags": [
+        "count",
+        "for-each",
+        "plan-time",
+        "computed"
+      ]
+    },
+    {
+      "error_pattern": "Provider produced inconsistent result.*tags_all",
+      "provider": "aws",
+      "resource": "multiple",
+      "root_cause": "The provider's default_tags propagation conflicts with resource-level tags. After apply, tags_all includes both default and resource tags, but the plan didn't predict this combination correctly. Most common with provider versions 3.38-4.x.",
+      "fix": "Ensure no overlap between default_tags and resource-level tags. If using default_tags in the provider block, don't repeat those same tag keys on individual resources. Upgrade to provider 5.x+ which handles this better.",
+      "severity": "high",
+      "tags": [
+        "tags",
+        "default-tags",
+        "inconsistent",
+        "provider"
+      ]
+    },
+    {
+      "error_pattern": "Error: Unsupported block type.*\"lifecycle\"",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "lifecycle block placed inside a nested block (like ingress, setting, or dynamic block) instead of at the top level of the resource block. lifecycle must be a direct child of the resource block.",
+      "fix": "Move the lifecycle block to the resource's top level. lifecycle { ... } goes inside resource \"type\" \"name\" { ... } directly, not inside any nested blocks.",
+      "severity": "low",
+      "tags": [
+        "lifecycle",
+        "syntax",
+        "hcl"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Variables may not be used here",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "Terraform backend configuration blocks do not support variables, locals, or any dynamic expressions. Everything in the backend block must be literal. This is because the backend is initialized before variable processing.",
+      "fix": "Use -backend-config CLI flag or .hcl backend config file: terraform init -backend-config=backend.hcl. Use partial configuration: leave values out of the backend block and pass them at init time. Or use a wrapper script/Terragrunt for dynamic backends.",
+      "severity": "medium",
+      "tags": [
+        "backend",
+        "variables",
+        "init",
+        "partial-config"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Module not installed.*terraform init",
+      "provider": "terraform",
+      "resource": "module",
+      "root_cause": "Modules referenced in configuration haven't been downloaded. terraform init downloads modules; running plan/apply without init (or after changing module sources) causes this error.",
+      "fix": "Run terraform init. If modules were recently changed: terraform init -upgrade. For private registry modules: ensure credentials are configured (TF_TOKEN_*, credentials block in CLI config, or TERRAFORM_CONFIG).",
+      "severity": "low",
+      "tags": [
+        "module",
+        "init",
+        "registry"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Saved plan is stale",
+      "provider": "terraform",
+      "resource": "state",
+      "root_cause": "The state changed between terraform plan -out=plan.tfplan and terraform apply plan.tfplan. Someone else applied changes, or you ran apply without the plan file first.",
+      "fix": "Re-run terraform plan -out=plan.tfplan and then apply the new plan file. This is a safety mechanism — don't try to bypass it. Use state locking to prevent concurrent modifications.",
+      "severity": "low",
+      "tags": [
+        "plan",
+        "stale",
+        "state",
+        "concurrency"
+      ]
+    },
+    {
+      "error_pattern": "error configuring S3 Backend.*NoSuchBucket",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "The S3 bucket for Terraform state storage doesn't exist. Can't create it with Terraform because Terraform needs state storage to run. Chicken-and-egg problem.",
+      "fix": "Create the state bucket outside Terraform (AWS CLI or Console), or use a separate bootstrap Terraform configuration with local state to create the bucket, then configure the backend. Use aws s3 mb s3://my-tf-state-bucket for quick bootstrap.",
+      "severity": "high",
+      "tags": [
+        "backend",
+        "s3",
+        "bootstrap",
+        "state"
+      ]
+    },
+    {
+      "error_pattern": "AccessDeniedException.*kms.*Decrypt|Encrypt",
+      "provider": "aws",
+      "resource": "aws_kms_key",
+      "root_cause": "KMS key policy doesn't grant the Terraform execution role permission to use the key. Unlike other services, KMS requires BOTH the key policy AND the IAM policy to allow access. The default key policy only allows the account root.",
+      "fix": "Add the Terraform execution role to the KMS key policy's key users section. Or add the 'Enable IAM User Permissions' statement that delegates permission management to IAM policies. Check both the key policy AND the IAM role's permissions.",
+      "severity": "high",
+      "tags": [
+        "kms",
+        "decrypt",
+        "key-policy",
+        "iam"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*failed to decode current backend config",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "The .terraform/terraform.tfstate file (local backend state metadata) is corrupted or contains configuration for a different backend type than what's currently in your .tf files (e.g., switching from local to S3 backend).",
+      "fix": "Delete .terraform directory and run terraform init again. If switching backends: terraform init -migrate-state will properly migrate. Never manually edit .terraform/terraform.tfstate.",
+      "severity": "medium",
+      "tags": [
+        "backend",
+        "init",
+        "migration",
+        "corrupt"
+      ]
+    },
+    {
+      "error_pattern": "ConditionalCheckFailedException.*terraform-locks|terraform_locks",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "DynamoDB state lock table interaction failed. Usually because the lock item was manually deleted while a process held the lock, or the DynamoDB table was recreated with a different key schema.",
+      "fix": "Verify the DynamoDB table exists and has the correct key schema (LockID as String partition key). If the lock is stale: terraform force-unlock <ID>. If the table was recreated: ensure the key schema matches (it's LockID, not lockID or id).",
+      "severity": "high",
+      "tags": [
+        "state",
+        "lock",
+        "dynamodb",
+        "conditional-check"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Attempt to get attribute from null value",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "Accessing an attribute of a resource or data source that returned null. Common with conditional resources (count = 0) where downstream references don't check for null, or data sources that return no results.",
+      "fix": "Use try() or conditional expressions: try(aws_instance.x[0].id, null). Or use one() for data sources that may return 0 results. For count-based resources: length(aws_instance.x) > 0 ? aws_instance.x[0].id : null",
+      "severity": "medium",
+      "tags": [
+        "null",
+        "conditional",
+        "count",
+        "try"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Reference to undeclared resource",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "Referencing a resource that doesn't exist in the current configuration. Common after: (1) renaming a resource without using moved blocks, (2) referencing a resource in another module without proper output/variable wiring, (3) typo in resource name.",
+      "fix": "Check the resource name spelling. If renamed: add a moved block (moved { from = old.name to = new.name }). If in another module: use module.name.output_name. If deleted: update all references.",
+      "severity": "low",
+      "tags": [
+        "reference",
+        "undeclared",
+        "moved",
+        "rename"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Invalid for_each argument.*The \"for_each\" set includes values derived from resource attributes",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "Same as count-depends-on-computed but for for_each. The set of keys must be known at plan time. If keys depend on resource attributes that aren't known until apply, Terraform can't enumerate the resources.",
+      "fix": "Use values known at plan time as for_each keys (variables, locals, static maps). If you must use computed values: use -target to create the dependency first, or restructure to use the known portions of the value as keys.",
+      "severity": "high",
+      "tags": [
+        "for-each",
+        "computed",
+        "plan-time",
+        "keys"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Provider configuration not present",
+      "provider": "terraform",
+      "resource": "module",
+      "root_cause": "A module requires a provider configuration that isn't being passed to it. This happens with modules that use provider aliases, or when a module expects a provider with specific configuration (like a different region).",
+      "fix": "Pass the provider configuration explicitly to the module using the providers argument: module \"x\" { providers = { aws = aws.us-east-1 } }. Ensure the provider alias exists in the calling module.",
+      "severity": "medium",
+      "tags": [
+        "provider",
+        "module",
+        "alias",
+        "configuration"
+      ]
+    },
+    {
+      "error_pattern": "timeout while waiting for state.*available|active|ready",
+      "provider": "aws",
+      "resource": "multiple",
+      "root_cause": "AWS resource is taking longer than Terraform's default timeout to reach the expected state. Common with: RDS instances (creation 20-40min), ElastiCache clusters (15-25min), EKS clusters (10-15min), CloudFront distributions (15-30min).",
+      "fix": "Increase the timeout in the resource's timeouts block: timeouts { create = '60m' delete = '60m' }. Don't just retry — if the resource is genuinely stuck, check AWS Console for the actual status and any error details.",
+      "severity": "medium",
+      "tags": [
+        "timeout",
+        "create",
+        "waiting",
+        "slow-resource"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Backend initialization required.*please run.*terraform init",
+      "provider": "terraform",
+      "resource": "backend",
+      "root_cause": "The working directory's .terraform directory is missing or the backend configuration has changed since last init. This is not an error condition — it's expected when cloning a repo or changing backend config.",
+      "fix": "Run terraform init. If you changed the backend configuration: terraform init -reconfigure (start fresh) or terraform init -migrate-state (migrate existing state to new backend).",
+      "severity": "low",
+      "tags": [
+        "init",
+        "backend",
+        "setup"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*state snapshot was created by Terraform v.*which is newer",
+      "provider": "terraform",
+      "resource": "state",
+      "root_cause": "The state file was written by a newer version of Terraform than you're running. Terraform doesn't support downgrading state file format. Common in teams where members use different Terraform versions.",
+      "fix": "Upgrade your Terraform binary to at least the version shown in the error. Pin your team to the same Terraform version using .terraform-version file (tfenv), required_version constraint, or Flox environment. Never manually edit the state version.",
+      "severity": "medium",
+      "tags": [
+        "state",
+        "version",
+        "upgrade",
+        "team"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*duplicate resource.*already exists",
+      "provider": "terraform",
+      "resource": "multiple",
+      "root_cause": "Two resource blocks have the same type and name. Or a moved block creates a conflict. Or count/for_each produces duplicate keys. Terraform requires unique addresses for all resources.",
+      "fix": "Rename one of the duplicate resources. If using for_each, ensure all keys are unique. If using moved blocks, ensure the destination doesn't already exist. Check for resources with the same name across different files.",
+      "severity": "low",
+      "tags": [
+        "duplicate",
+        "naming",
+        "address"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Plugin did not respond",
+      "provider": "terraform",
+      "resource": "provider",
+      "root_cause": "The provider plugin process crashed or was killed. Can be caused by: running out of memory on large states, provider binary corruption, incompatible Terraform/provider versions, or OS-level resource limits.",
+      "fix": "Try again — transient crashes may not recur. If persistent: increase available memory, clear provider cache (rm -rf .terraform/providers && terraform init), check Terraform/provider version compatibility, or check for known issues in the provider's GitHub.",
+      "severity": "high",
+      "tags": [
+        "crash",
+        "plugin",
+        "memory",
+        "provider"
+      ]
+    },
+    {
+      "error_pattern": "Error:.*Inconsistent dependency lock file",
+      "provider": "terraform",
+      "resource": "provider",
+      "root_cause": "The .terraform.lock.hcl file doesn't match the current required_providers configuration. Either the lock file was generated on a different platform, provider version constraints were changed, or the lock file is corrupted.",
+      "fix": "Run terraform init -upgrade to regenerate the lock file. If cross-platform: use terraform providers lock -platform=linux_amd64 -platform=darwin_amd64 -platform=darwin_arm64 to generate hashes for all platforms.",
+      "severity": "medium",
+      "tags": [
+        "lock",
+        "dependency",
+        "init",
+        "cross-platform"
+      ]
+    }
+  ]
+}

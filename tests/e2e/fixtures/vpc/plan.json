@@ -1,0 +1,268 @@
+{
+  "format_version": "1.2",
+  "terraform_version": "1.7.0",
+  "planned_values": {},
+  "resource_changes": [
+    {
+      "address": "aws_vpc.main",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.0.0/16",
+          "enable_dns_support": true,
+          "enable_dns_hostnames": true,
+          "tags": {"Name": "boid-demo-vpc"}
+        }
+      }
+    },
+    {
+      "address": "aws_internet_gateway.main",
+      "type": "aws_internet_gateway",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "tags": {"Name": "boid-demo-igw"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.public[0]",
+      "type": "aws_subnet",
+      "name": "public",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.0.0/24",
+          "availability_zone": "us-east-1a",
+          "map_public_ip_on_launch": true,
+          "tags": {"Name": "boid-demo-public-us-east-1a", "Tier": "public"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.public[1]",
+      "type": "aws_subnet",
+      "name": "public",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.1.0/24",
+          "availability_zone": "us-east-1b",
+          "map_public_ip_on_launch": true,
+          "tags": {"Name": "boid-demo-public-us-east-1b", "Tier": "public"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.public[2]",
+      "type": "aws_subnet",
+      "name": "public",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.2.0/24",
+          "availability_zone": "us-east-1c",
+          "map_public_ip_on_launch": true,
+          "tags": {"Name": "boid-demo-public-us-east-1c", "Tier": "public"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.private[0]",
+      "type": "aws_subnet",
+      "name": "private",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.100.0/24",
+          "availability_zone": "us-east-1a",
+          "tags": {"Name": "boid-demo-private-us-east-1a", "Tier": "private"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.private[1]",
+      "type": "aws_subnet",
+      "name": "private",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.101.0/24",
+          "availability_zone": "us-east-1b",
+          "tags": {"Name": "boid-demo-private-us-east-1b", "Tier": "private"}
+        }
+      }
+    },
+    {
+      "address": "aws_subnet.private[2]",
+      "type": "aws_subnet",
+      "name": "private",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "cidr_block": "10.0.102.0/24",
+          "availability_zone": "us-east-1c",
+          "tags": {"Name": "boid-demo-private-us-east-1c", "Tier": "private"}
+        }
+      }
+    },
+    {
+      "address": "aws_eip.nat[0]",
+      "type": "aws_eip",
+      "name": "nat",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "domain": "vpc",
+          "tags": {"Name": "boid-demo-nat-eip-us-east-1a"}
+        }
+      }
+    },
+    {
+      "address": "aws_eip.nat[1]",
+      "type": "aws_eip",
+      "name": "nat",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "domain": "vpc",
+          "tags": {"Name": "boid-demo-nat-eip-us-east-1b"}
+        }
+      }
+    },
+    {
+      "address": "aws_eip.nat[2]",
+      "type": "aws_eip",
+      "name": "nat",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "domain": "vpc",
+          "tags": {"Name": "boid-demo-nat-eip-us-east-1c"}
+        }
+      }
+    },
+    {
+      "address": "aws_nat_gateway.main[0]",
+      "type": "aws_nat_gateway",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "tags": {"Name": "boid-demo-nat-us-east-1a"}
+        }
+      }
+    },
+    {
+      "address": "aws_nat_gateway.main[1]",
+      "type": "aws_nat_gateway",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "tags": {"Name": "boid-demo-nat-us-east-1b"}
+        }
+      }
+    },
+    {
+      "address": "aws_nat_gateway.main[2]",
+      "type": "aws_nat_gateway",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "tags": {"Name": "boid-demo-nat-us-east-1c"}
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.web",
+      "type": "aws_security_group",
+      "name": "web",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-web-sg",
+          "description": "Web tier security group",
+          "ingress": [
+            {"from_port": 80, "to_port": 80, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"]},
+            {"from_port": 443, "to_port": 443, "protocol": "tcp", "cidr_blocks": ["0.0.0.0/0"]}
+          ],
+          "egress": [
+            {"from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}
+          ]
+        }
+      }
+    },
+    {
+      "address": "aws_security_group.app",
+      "type": "aws_security_group",
+      "name": "app",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "name": "boid-demo-app-sg",
+          "description": "App tier security group",
+          "ingress": [
+            {"from_port": 8080, "to_port": 8080, "protocol": "tcp", "security_groups": ["sg-web"]}
+          ],
+          "egress": [
+            {"from_port": 0, "to_port": 0, "protocol": "-1", "cidr_blocks": ["0.0.0.0/0"]}
+          ]
+        }
+      }
+    }
+  ],
+  "diagnostics": [
+    {
+      "severity": "error",
+      "summary": "Cycle: aws_security_group.web, aws_security_group.app",
+      "detail": "A cycle was detected in the resource dependency graph. This is caused by security groups that reference each other using inline ingress/egress blocks. Use separate aws_security_group_rule resources to break the cycle.",
+      "address": "aws_security_group.web"
+    }
+  ],
+  "configuration": {
+    "provider_config": {
+      "aws": {
+        "name": "aws",
+        "full_name": "registry.terraform.io/hashicorp/aws",
+        "version_constraint": "~> 5.0"
+      }
+    }
+  }
+}

@@ -1,0 +1,140 @@
+{
+  "_meta": {
+    "description": "Real-world Terraform error messages for Canon retrieval testing. Each entry has the raw error text and the expected matching signature(s).",
+    "count": 15
+  },
+  "errors": [
+    {
+      "id": "err-001",
+      "raw_error": "Error: Provider produced inconsistent final plan. When expanding the plan for aws_s3_bucket.logs to include new values learned so far during apply, provider \"registry.terraform.io/hashicorp/aws\" produced an invalid new value for .tags_all: new element \"Environment\" has appeared.",
+      "expected_pattern": "Provider produced inconsistent final plan",
+      "expected_resource": "multiple",
+      "description": "tags_all inconsistency with default_tags"
+    },
+    {
+      "id": "err-002",
+      "raw_error": "Error: error configuring S3 Backend: no valid credential sources for S3 Backend found.\n\nPlease see https://www.terraform.io/docs/language/settings/backends/s3.html",
+      "expected_pattern": "no valid credential sources.*found",
+      "expected_resource": "provider",
+      "description": "AWS credentials not configured"
+    },
+    {
+      "id": "err-003",
+      "raw_error": "Error: Error acquiring the state lock\n\nError message: ConditionalCheckFailedException: The conditional request failed\nLock Info:\n  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890\n  Path:      my-bucket/terraform.tfstate\n  Operation: OperationTypeApply",
+      "expected_pattern": "Error acquiring the state lock",
+      "expected_resource": "backend",
+      "description": "DynamoDB state lock contention"
+    },
+    {
+      "id": "err-004",
+      "raw_error": "Error: Error creating Lambda function: InvalidParameterValueException: The role defined for the function cannot be assumed by Lambda.\n  status code: 400",
+      "expected_pattern": "The role defined for the function cannot be assumed by Lambda",
+      "expected_resource": "aws_lambda_function",
+      "description": "IAM eventual consistency for Lambda role"
+    },
+    {
+      "id": "err-005",
+      "raw_error": "Error: Cycle: aws_security_group.web, aws_security_group_rule.web_to_app, aws_security_group.app, aws_security_group_rule.app_to_web",
+      "expected_pattern": "Cycle:.*aws_security_group",
+      "expected_resource": "aws_security_group",
+      "description": "SG circular dependency"
+    },
+    {
+      "id": "err-006",
+      "raw_error": "Error: Error deleting security group (sg-0abc123def456): DependencyViolation: resource sg-0abc123def456 has a dependent object\n  status code: 400",
+      "expected_pattern": "DependencyViolation",
+      "expected_resource": "aws_security_group",
+      "description": "SG deletion with dependent ENIs"
+    },
+    {
+      "id": "err-007",
+      "raw_error": "Error: The \"count\" value depends on resource attributes that cannot be determined until apply, so Terraform cannot predict how many instances will be created. To work around this, use the -target argument.",
+      "expected_pattern": "count.*value depends on resource attributes",
+      "expected_resource": "multiple",
+      "description": "count depends on computed value"
+    },
+    {
+      "id": "err-008",
+      "raw_error": "Error: error creating RDS DB Instance (mydb): DBSubnetGroupDoesNotCoverEnoughAZs: The DB subnet group doesn't meet Availability Zone (AZ) coverage requirement. Current AZ coverage: us-east-1a. Add subnets to cover at least 2 AZs.",
+      "expected_pattern": "DBSubnetGroupDoesNotCoverEnoughAZs",
+      "expected_resource": "aws_db_instance",
+      "description": "RDS subnet group needs 2 AZs"
+    },
+    {
+      "id": "err-009",
+      "raw_error": "Error: Variables may not be used here.\n\nA default value for variable \"region\" may not reference other variables or call functions. Variables are constant values within a module.",
+      "expected_pattern": "Variables may not be used here",
+      "expected_resource": "backend",
+      "description": "Variables not allowed in backend config"
+    },
+    {
+      "id": "err-010",
+      "raw_error": "Error: error configuring S3 Backend: NoSuchBucket: The specified bucket does not exist\n  status code: 404, request id: ABC123",
+      "expected_pattern": "NoSuchBucket",
+      "expected_resource": "backend",
+      "description": "S3 backend bucket doesn't exist"
+    },
+    {
+      "id": "err-011",
+      "raw_error": "Error: EntityAlreadyExists: Role with name my-lambda-role already exists.\n  status code: 409",
+      "expected_pattern": "EntityAlreadyExists",
+      "expected_resource": "aws_iam_role",
+      "description": "IAM role exists outside Terraform"
+    },
+    {
+      "id": "err-012",
+      "raw_error": "Error waiting for ECS service (arn:aws:ecs:us-east-1:123456789012:service/my-cluster/my-service) to reach a steady state: timeout while waiting for state to become 'tfSTABLE'",
+      "expected_pattern": "ECS service.*to reach a steady state",
+      "expected_resource": "aws_ecs_service",
+      "description": "ECS service failing health checks"
+    },
+    {
+      "id": "err-013",
+      "raw_error": "Error: Unsupported block type\n\non main.tf line 15, in resource \"aws_security_group\" \"web\":\n  15:     lifecycle {\n\nBlocks of type \"lifecycle\" are not expected here.",
+      "expected_pattern": "Unsupported block type.*lifecycle",
+      "expected_resource": "multiple",
+      "description": "lifecycle block in wrong location"
+    },
+    {
+      "id": "err-014",
+      "raw_error": "Error: Inconsistent dependency lock file\n\nThe following dependency selections recorded in the lock file are inconsistent with the current configuration:\n  - provider registry.terraform.io/hashicorp/aws: locked version selection 5.31.0 doesn't match the updated version constraints \"~> 5.40.0\"",
+      "expected_pattern": "Inconsistent dependency lock file",
+      "expected_resource": "provider",
+      "description": "Lock file version mismatch"
+    },
+    {
+      "id": "err-015",
+      "raw_error": "Error: Plugin did not respond\n\nThe plugin encountered an error, and failed to respond to the plugin.(*GRPCProvider).ReadResource call. The plugin logs may contain more details.",
+      "expected_pattern": "Plugin did not respond",
+      "expected_resource": "provider",
+      "description": "Provider plugin crash"
+    }
+  ],
+  "non_matching_errors": [
+    {
+      "id": "neg-001",
+      "raw_error": "Error: Could not load plugin\n\nPlugin reinitialization required. Please run \"terraform init\".",
+      "description": "Generic init error — should not match any specific signature with high confidence"
+    },
+    {
+      "id": "neg-002",
+      "raw_error": "Error: Missing required argument\n\nThe argument \"region\" is required, but no definition was found.",
+      "description": "Missing argument — basic config error, not a Canon signature"
+    },
+    {
+      "id": "neg-003",
+      "raw_error": "Error: Unsupported argument\n\non main.tf line 5, in resource \"aws_instance\" \"web\":\n   5:   instance_typo = \"t3.micro\"\n\nAn argument named \"instance_typo\" is not expected here. Did you mean \"instance_type\"?",
+      "description": "Typo in argument name — basic config error"
+    },
+    {
+      "id": "neg-004",
+      "raw_error": "Error: Invalid expression\n\non main.tf line 3:\n   3:   value = var.name +\n\nExpected the start of an expression, but found an invalid expression token.",
+      "description": "HCL syntax error — not a Canon signature"
+    },
+    {
+      "id": "neg-005",
+      "raw_error": "Warning: Argument is deprecated\n\nUse \"source_security_group_id\" instead.",
+      "description": "Deprecation warning — not an error"
+    }
+  ]
+}

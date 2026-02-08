@@ -74,6 +74,9 @@ on-activate = '''
   echo "  aws-cli:   $(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)"
   echo "  sqlite3:   $(sqlite3 --version | cut -d' ' -f1)"
   echo "  node:      $(node --version)"
+
+  # Initialize Memories DB if needed
+  source "$FLOX_ENV_PROJECT/scripts/on-activate.sh"
 '''
 #   # -> Perform initialization steps, e.g. create a python venv
 #   # -> Useful environment variables:

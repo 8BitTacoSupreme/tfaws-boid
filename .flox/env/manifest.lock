@@ -62,7 +62,7 @@
       }
     },
     "hook": {
-      "on-activate": "  echo \"terraform-aws-boid dev environment\"\n  echo \"  terraform: $(terraform version -json | jq -r '.terraform_version')\"\n  echo \"  aws-cli:   $(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)\"\n  echo \"  sqlite3:   $(sqlite3 --version | cut -d' ' -f1)\"\n  echo \"  node:      $(node --version)\"\n"
+      "on-activate": "  echo \"terraform-aws-boid dev environment\"\n  echo \"  terraform: $(terraform version -json | jq -r '.terraform_version')\"\n  echo \"  aws-cli:   $(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)\"\n  echo \"  sqlite3:   $(sqlite3 --version | cut -d' ' -f1)\"\n  echo \"  node:      $(node --version)\"\n\n  # Initialize Memories DB if needed\n  source \"$FLOX_ENV_PROJECT/scripts/on-activate.sh\"\n"
     },
     "profile": {},
     "options": {}
