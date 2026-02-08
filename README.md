@@ -86,6 +86,31 @@ single_session_ceiling = 0.7
 
 The machinery is proven across 52 tests. The seasoning happens through real use — corrections compound over sessions, not minutes.
 
+## Using with Claude Code
+
+The boid ships with Claude Code. To use the boid agent in your own project:
+
+```bash
+# Activate the boid (from a checkout of this repo)
+flox activate
+
+# Initialize boid in your project directory
+boid-init /path/to/your/project
+
+# Start the agent
+cd /path/to/your/project && claude
+```
+
+### Deploy from Architecture Document
+```
+> Read docs/REFERENCE-ARCHITECTURES.md and deploy section 2 into deploy/
+```
+
+### Deploy Interactively
+```
+> I need a 3-AZ VPC with private subnets, NAT gateway, and an EKS cluster
+```
+
 ## Sandbox Validation
 
 Start LocalStack for plan/apply testing:

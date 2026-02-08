@@ -40,6 +40,9 @@ python3.pkg-path = "python3"
 # Node.js (MCP servers are typically TypeScript)
 nodejs.pkg-path = "nodejs_22"
 
+# AI agent (self-contained boid)
+claude-code.pkg-path = "claude-code"
+
 # Shell quality
 shellcheck.pkg-path = "shellcheck"
 shfmt.pkg-path = "shfmt"
@@ -81,6 +84,8 @@ on-activate = '''
   else
     echo "[boid] Remote environment — run inside a project checkout for Memories + Canon"
   fi
+
+  echo "[boid] Claude Code available — run 'claude' or 'boid-init <dir>' to set up a project"
 '''
 #   # -> Perform initialization steps, e.g. create a python venv
 #   # -> Useful environment variables:
@@ -94,16 +99,69 @@ on-activate = '''
 ## ... sourced by _your shell_ when you run 'flox activate'.
 ## -------------------------------------------------------------------
 [profile]
-# common = '''
-#   gum style \
-#   --foreground 212 --border-foreground 212 --border double \
-#   --align center --width 50 --margin "1 2" --padding "2 4" \
-#     $INTRO_MESSAGE
-# '''
-## Shell-specific customizations such as setting aliases go here:
-# bash = ...
-# zsh  = ...
-# fish = ...
+common = '''
+  boid-init() {
+    local target="${1:-.}"
+    local boid_home="${BOID_HOME:-${FLOX_ENV_PROJECT:-.}}"
+
+    if [[ ! -f "${boid_home}/boid-claude.md" ]]; then
+      echo "[boid-init] ERROR: Cannot find boid-claude.md at ${boid_home}"
+      echo "            Run this from inside an activated boid project checkout."
+      return 1
+    fi
+
+    # Copy CLAUDE.md (the shipped agent instructions)
+    if [[ -f "${target}/CLAUDE.md" ]]; then
+      echo "[boid-init] CLAUDE.md already exists in ${target} — backing up to CLAUDE.md.bak"
+      cp "${target}/CLAUDE.md" "${target}/CLAUDE.md.bak"
+    fi
+    cp "${boid_home}/boid-claude.md" "${target}/CLAUDE.md"
+
+    # Create .claude/settings.json with MCP servers pointing to boid
+    mkdir -p "${target}/.claude"
+    cat > "${target}/.claude/settings.json" <<SETTINGS
+{
+  "mcpServers": {
+    "sqlite": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-sqlite", "--db-path", "${BOID_MEMORY_DB:-${boid_home}/memory/boid.db}"]
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-fetch"]
+    },
+    "terraform": {
+      "command": "npx",
+      "args": ["-y", "terraform-mcp-server"]
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(terraform:*)",
+      "Bash(aws:*)",
+      "Bash(localstack:*)",
+      "Bash(tflint:*)",
+      "Bash(tfsec:*)",
+      "Bash(infracost:*)",
+      "Bash(sqlite3:*)",
+      "Bash(jq:*)",
+      "Bash(podman:*)",
+      "Bash(shellcheck:*)",
+      "Bash(python3:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)"
+    ]
+  }
+}
+SETTINGS
+
+    echo "[boid-init] Initialized boid agent in ${target}"
+    echo "  CLAUDE.md    → boid Terraform+AWS agent instructions"
+    echo "  .claude/     → MCP servers (sqlite, fetch, terraform)"
+    echo ""
+    echo "  Run: cd ${target} && claude"
+  }
+'''
 
 
 ## Services ---------------------------------------------------------

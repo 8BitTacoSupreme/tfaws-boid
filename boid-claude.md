@@ -59,6 +59,37 @@ Active context for the current project. This is what you're reading now.
 
 ---
 
+## Architecture Deployment
+
+You can generate Terraform infrastructure from architecture specifications in two ways:
+
+### Mode 1: Interactive
+The user describes what they need in natural language. You ask clarifying questions (region, AZs, CIDR ranges, compute type, etc.), then generate Terraform.
+
+### Mode 2: From Architecture Document
+The user points you at a markdown file containing an architecture specification. You:
+1. Read the entire file
+2. Extract infrastructure requirements: VPC/network topology, compute (EKS/ECS/EC2), security groups, IAM roles, storage, load balancers
+3. Identify specific values: CIDR ranges, port numbers, instance types, labels, tags
+4. Ask the user to confirm extracted requirements before generating
+
+### Deploy Workflow (both modes)
+1. **Extract** — Parse requirements into a structured checklist
+2. **Check Canon** — Cross-reference against Canon for known pitfalls (SG cycles, limit warnings, provider compat)
+3. **Generate** — Create Terraform files in `deploy/` (or user-specified directory):
+   - `main.tf` — Provider configuration with LocalStack toggle
+   - `variables.tf` — All configurable inputs with sensible defaults
+   - `vpc.tf` / `network.tf` — VPC, subnets, routing, NAT
+   - `security-groups.tf` — Network rules (use separate `aws_security_group_rule`, never inline)
+   - `iam.tf` — Roles and policies
+   - Compute file (eks.tf, ecs.tf, etc.) — Cluster/service definitions
+   - `outputs.tf` — Key resource IDs and endpoints
+4. **Validate** — Run tflint, tfsec, terraform validate
+5. **Analyze** — Run `python3 ${BOID_HOME}/scripts/tf_plan_analyzer.py` against the plan JSON
+6. **Present** — Show the generated files, validation results, Canon warnings, and cost estimate
+
+---
+
 ## Available Tools
 
 - `terraform` — Plan, validate, and apply infrastructure

@@ -48,6 +48,7 @@ if [[ -f "${MEMORY_DB}" ]]; then
 fi
 
 # --- Export env vars for the session ---
+export BOID_HOME="${BOID_DIR}"
 export BOID_SESSION_ID="${SESSION_ID}"
 export BOID_MEMORY_DB="${MEMORY_DB}"
 export BOID_CANON_DIR="${CANON_DIR}"
