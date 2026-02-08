@@ -75,8 +75,12 @@ on-activate = '''
   echo "  sqlite3:   $(sqlite3 --version | cut -d' ' -f1)"
   echo "  node:      $(node --version)"
 
-  # Initialize Memories DB if needed
-  source "$FLOX_ENV_PROJECT/scripts/on-activate.sh"
+  # Initialize boid if running inside a project checkout
+  if [[ -n "${FLOX_ENV_PROJECT:-}" && -f "${FLOX_ENV_PROJECT}/scripts/on-activate.sh" ]]; then
+    source "${FLOX_ENV_PROJECT}/scripts/on-activate.sh"
+  else
+    echo "[boid] Remote environment — run inside a project checkout for Memories + Canon"
+  fi
 '''
 #   # -> Perform initialization steps, e.g. create a python venv
 #   # -> Useful environment variables:
