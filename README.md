@@ -5,7 +5,7 @@ A Flox Agentic Environment that gives any AI coding agent expert Terraform+AWS k
 ## Quickstart
 
 ```bash
-flox activate -r floxhub/terraform-aws
+flox activate -r 8BitTacoSupreme/tfaws-boid
 # That's it. Your agent has Canon knowledge + Memories + sandbox.
 ```
 

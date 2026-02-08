@@ -3,7 +3,7 @@
 ## Current Phase: 5 — E2E Validation & Polish
 
 ## North Star
-A developer runs `flox activate -r floxhub/terraform-aws` and gets an
+A developer runs `flox activate -r 8BitTacoSupreme/tfaws-boid` and gets an
 expert Terraform+AWS agent with zero setup. The agent validates its
 suggestions against LocalStack before presenting them. Over time, the
 agent learns the user's conventions and infrastructure quirks.

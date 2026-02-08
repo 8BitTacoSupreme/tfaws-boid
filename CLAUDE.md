@@ -4,7 +4,7 @@
 
 You are building the **terraform-aws-boid**: the first Flox Agentic Environment proof-of-concept. This is a portable, shareable, self-seasoning AI development environment for Terraform + AWS infrastructure work.
 
-**What ships:** A complete Flox environment published to FloxHub that any developer can activate with `flox activate -r floxhub/terraform-aws` and immediately get an expert Terraform+AWS AI agent — sandboxed, constrained, and loaded with domain knowledge.
+**What ships:** A complete Flox environment published to FloxHub that any developer can activate with `flox activate -r 8BitTacoSupreme/tfaws-boid` and immediately get an expert Terraform+AWS AI agent — sandboxed, constrained, and loaded with domain knowledge.
 
 **This is a meta-project.** You are an AI agent building the packaging and knowledge system for AI agents. Stay aware of that recursion — decisions you make about how the boid works will affect agents like you.
 
