@@ -40,8 +40,9 @@ python3.pkg-path = "python3"
 # Node.js (MCP servers are typically TypeScript)
 nodejs.pkg-path = "nodejs_22"
 
-# AI agent (self-contained boid)
+# AI agent (self-contained boid) — own pkg-group to get latest version
 claude-code.pkg-path = "claude-code"
+claude-code.pkg-group = "claude"
 
 # Boid data package (skill, canon, scripts, schema)
 tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
