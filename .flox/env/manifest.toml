@@ -44,8 +44,8 @@ nodejs.pkg-path = "nodejs_22"
 claude-code.pkg-path = "claude-code"
 
 # Boid data package (skill, canon, scripts, schema)
-# NOTE: uncomment after `flox publish` — self-referencing during build is circular
-# tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
+tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
+tfaws-boid.systems = ["aarch64-darwin"]
 
 # Shell quality
 shellcheck.pkg-path = "shellcheck"

@@ -8,3 +8,4 @@ memory/boid.db
 result-*
 .terraform/
 .terraform.lock.hcl
+.claude/skills/
