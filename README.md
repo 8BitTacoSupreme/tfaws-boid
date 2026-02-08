@@ -6,7 +6,8 @@ A Flox Agentic Environment that gives any AI coding agent expert Terraform+AWS k
 
 ```bash
 flox activate -r 8BitTacoSupreme/tfaws-boid
-# That's it. Your agent has Canon knowledge + Memories + sandbox.
+claude
+# That's it. The boid skill is auto-linked, Canon is loaded, Memories persist locally.
 ```
 
 ## What You Get
@@ -23,6 +24,34 @@ When you activate the boid, your AI agent gains:
 | `canon_search.py` | Search 133 curated Terraform+AWS pitfalls, limits, and patterns |
 | `tf_plan_analyzer.py` | Cross-reference any plan JSON against Canon knowledge |
 | `memory_lib.py` | Persistent memory — fixes, conventions, and quirks that grow with use |
+
+## What Happens on Activate
+
+When you run `flox activate`, the environment automatically:
+
+1. **Links the boid skill** — Symlinks `SKILL.md` into `.claude/skills/tfaws-boid/` so Claude Code discovers it as a slash command (`/tfaws-boid`)
+2. **Deploys MCP servers** — Copies `settings.json` into `.claude/` with three pre-configured MCP servers (Terraform Registry, SQLite, Fetch). Merges additively with existing settings — never clobbers.
+3. **Initializes Memories** — Creates `memory/boid.db` from the shipped schema on first activate. Subsequent activates skip this step.
+4. **Runs schema migrations** — Detects schema version and applies migrations if needed (e.g., v1 → v2 session tracking).
+5. **Validates Canon** — Checks that all 5 Canon JSON files are present and reports the count.
+6. **Starts session tracking** — Generates a UUID session ID, records it in the Memories DB for confidence scoring across sessions.
+7. **Exports environment** — Sets `BOID_HOME`, `BOID_CANON_DIR`, `BOID_MEMORY_DB`, `BOID_SESSION_ID` for scripts and the agent to use.
+
+No manual configuration required. Run `flox activate` and `claude` — the agent is primed.
+
+## What Claude Sees
+
+After activation, Claude Code has access to:
+
+| Category | What's Available |
+|----------|-----------------|
+| **Skill** | `SKILL.md` — the full Terraform+AWS agent playbook (Tier 3 Mission template) |
+| **MCP: terraform-mcp-server** | Terraform Registry lookups — provider docs, resource schemas, module search |
+| **MCP: sqlite** | Structured Memories queries — read/write to `memory/boid.db` |
+| **MCP: fetch** | HTTP fetching for pulling external documentation |
+| **Shell tools** | `terraform`, `tflint`, `tfsec`, `infracost`, `localstack`, `aws`, `sqlite3`, `jq`, `yq` |
+| **Python scripts** | `canon_search.py`, `tf_plan_analyzer.py`, `memory_lib.py` |
+| **Environment vars** | `BOID_HOME`, `BOID_CANON_DIR`, `BOID_MEMORY_DB`, `BOID_SESSION_ID` |
 
 ## Try It: VPC Review
 
@@ -59,32 +88,14 @@ Curated Terraform+AWS knowledge that ships with the boid. Error signatures mappe
 ### Tier 2: Memories (SQLite, Local)
 Earned knowledge that persists across sessions. Validated fixes, naming conventions, infrastructure quirks. Created on first `flox activate`, grows with use. Each entry has a `scope` tag (personal, team, org) that controls what propagates when you fork.
 
-### Tier 3: Mission (CLAUDE.md + docs/)
-Active project context. Architecture rules, constraints, current plans. This is the only tier that occupies the LLM context window directly.
+### Tier 3: Mission (SKILL.md + your CLAUDE.md)
+Active project context. The boid ships `SKILL.md` as a Claude Code skill — it's auto-linked on activate and provides the agent's Terraform+AWS playbook. You add your own `CLAUDE.md` in your project for per-project architecture rules, constraints, and plans.
 
 **Why three tiers?**
 - Canon + Memories prevent context drift — stable upstream truth + persistent local knowledge
 - Memories + Mission prevent over-fitting — evidence-based learning + current scope constraints
 
 For architecture decision records, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## How It Learns
-
-The boid's Memories tier uses a session-weighted confidence model:
-
-1. **Record** — You correct the agent's naming: "we use kebab-case for S3 buckets." The convention is stored with confidence = 0.5 and distinct_sessions = 1.
-2. **Reinforce** — Next session, the same correction is reinforced. Confidence rises to 0.6, distinct_sessions = 2.
-3. **Override** — After 3 sessions of reinforcement: confidence = 0.7, distinct_sessions = 3, effective_confidence = 0.7 + (3-1) * 0.05 = 0.8. At 0.8+, the convention overrides Canon defaults.
-
-The model prevents single-session flukes from dominating. A convention must be reinforced across multiple sessions to earn override authority.
-
-```
-effective_confidence = min(raw_confidence + session_bonus, 1.0)
-session_bonus = min((distinct_sessions - 1) * 0.05, 0.2)
-single_session_ceiling = 0.7
-```
-
-The machinery is proven across 52 tests. The seasoning happens through real use — corrections compound over sessions, not minutes.
 
 ## Using with Claude Code
 
@@ -106,6 +117,24 @@ claude
 ```
 > I need a 3-AZ VPC with private subnets, NAT gateway, and an EKS cluster
 ```
+
+## How It Learns
+
+The boid's Memories tier uses a session-weighted confidence model:
+
+1. **Record** — You correct the agent's naming: "we use kebab-case for S3 buckets." The convention is stored with confidence = 0.5 and distinct_sessions = 1.
+2. **Reinforce** — Next session, the same correction is reinforced. Confidence rises to 0.6, distinct_sessions = 2.
+3. **Override** — After 3 sessions of reinforcement: confidence = 0.7, distinct_sessions = 3, effective_confidence = 0.7 + (3-1) * 0.05 = 0.8. At 0.8+, the convention overrides Canon defaults.
+
+The model prevents single-session flukes from dominating. A convention must be reinforced across multiple sessions to earn override authority.
+
+```
+effective_confidence = min(raw_confidence + session_bonus, 1.0)
+session_bonus = min((distinct_sessions - 1) * 0.05, 0.2)
+single_session_ceiling = 0.7
+```
+
+The machinery is proven across 52 tests. The seasoning happens through real use — corrections compound over sessions, not minutes.
 
 ## Sandbox Validation
 
@@ -173,7 +202,6 @@ python3 -m unittest discover tests/e2e/ -v         # E2E scenario tests
 
 - **Layer swap** — Activate domain overlays (e.g., `terraform-datadog`) that extend the Canon with vendor-specific knowledge without replacing the base AWS boid
 - **Semantic search** — Upgrade Canon retrieval from regex matching to vector similarity for fuzzy error matching
-- **FloxHub publish** — Package and publish to FloxHub for `flox activate -r` distribution
 
 ## License
 

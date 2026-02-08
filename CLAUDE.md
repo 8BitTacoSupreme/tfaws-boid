@@ -28,8 +28,8 @@ This project implements three knowledge tiers. Understand these deeply — they 
 - **Contents:** Validated fixes, naming conventions, local infra quirks, error resolution history
 - **Key property:** Each entry has a `scope` tag (personal | team | org) that controls what propagates on fork
 
-### Tier 3: Mission (CLAUDE.md + docs/)
-- **Storage:** Flat files in the project directory
+### Tier 3: Mission (SKILL.md + user's CLAUDE.md + docs/)
+- **Storage:** SKILL.md ships as a Claude Code skill (auto-linked on activate); users add their own CLAUDE.md per-project
 - **Mutability:** Ephemeral. Per-project.
 - **Purpose:** Active context — architecture rules, constraints, current plans for the project at hand
 - **Key property:** This is the ONLY tier that occupies the LLM context window directly
@@ -46,21 +46,15 @@ This project implements three knowledge tiers. Understand these deeply — they 
 terraform-aws-boid/
 ├── .flox/                          # Flox environment definition
 │   └── env/
-│       ├── manifest.toml           # Package declarations
-│       └── hooks/
-│           ├── on-activate.sh      # Mount SQLite, start MCP, load Canon
-│           └── on-deactivate.sh    # Checkpoint, stop sidecars
+│       └── manifest.toml           # Package declarations + build + hooks
 ├── .claude/                        # Claude Code agent configuration
 │   └── settings.json               # MCP server declarations + permissions
-├── boid-claude.md                  # The CLAUDE.md that SHIPS with the boid
-│                                   #   (the Mission template for end users)
+├── SKILL.md                        # The Mission template that SHIPS with the boid
+│                                   #   (auto-linked as a Claude Code skill on activate)
 ├── docs/                           # Architecture & planning (our Mission)
 │   ├── PLAN.md                     # Current development plan + task tracking
 │   ├── ARCHITECTURE.md             # System design decisions
-│   ├── TODO.md                     # Actionable task list
-│   ├── patterns.md                 # Terraform+AWS canonical patterns
-│   ├── anti-patterns.md            # Known pitfalls and why they fail
-│   └── conventions.md              # Naming, structure, tagging rules
+│   └── TODO.md                     # Actionable task list
 ├── canon/                          # Tier 1: The Canon (RAG seed data)
 │   ├── error-signatures.json       # Error → root cause mappings
 │   ├── aws-limits.json             # Service quotas & gotchas
@@ -69,29 +63,35 @@ terraform-aws-boid/
 │   └── sg-interactions.json        # Security group interaction patterns
 ├── memory/                         # Tier 2: Memories
 │   ├── schema.sql                  # SQLite schema definition
-│   └── .gitkeep                    # DB created on first activate
-├── mcp/                            # MCP server configs
-│   ├── terraform-mcp/              # Terraform plan/state server
-│   └── localstack-mcp/             # LocalStack provisioning server
+│   └── migrate_v1_to_v2.sql        # Schema migration (v1 → v2 session tracking)
+├── mcp/                            # MCP documentation
+│   └── README.md                   # ADR: CLI tools over custom MCP servers
 ├── sandbox/                        # Sandbox orchestration
 │   ├── localstack-compose.yml      # LocalStack docker-compose
 │   └── validate.sh                 # Run agent's proposed fix in sandbox
 ├── scripts/                        # Build and utility scripts
+│   ├── canon_lib.py                # Canon search library
+│   ├── canon_search.py             # CLI Canon search tool
+│   ├── tf_plan_analyzer.py         # Cross-reference plans against Canon
+│   ├── memory_lib.py               # Memories CRUD library
+│   ├── fork-memory.sh              # Export scoped Memories for sharing
 │   ├── seed-canon.sh               # Populate Canon vector store
+│   ├── seed-*.py                   # Per-Canon-file seed scripts
 │   ├── init-memory.sh              # Initialize Memories SQLite
 │   └── test-boid.sh                # End-to-end boid validation
 ├── tests/                          # Validation tests
 │   ├── canon/                      # Canon retrieval accuracy tests
 │   ├── memory/                     # SQLite CRUD + scope tests
+│   ├── phase3/                     # Integration tests (plan analyzer, SG cycle)
 │   └── e2e/                        # Full activate → task → validate tests
 └── README.md                       # Usage, examples, contribution guide
 ```
 
 **IMPORTANT:** This project contains TWO Claude configurations:
 1. **This file (CLAUDE.md)** — instructions for YOU, the developer agent building the boid
-2. **boid-claude.md** — the Mission template that ships WITH the boid for end users
+2. **SKILL.md** — the Mission template that ships WITH the boid for end users (auto-linked as a Claude Code skill on activate)
 
-Do not confuse them. When working on agent behavior for the shipped product, edit `boid-claude.md`. This file governs YOUR behavior during development.
+Do not confuse them. When working on agent behavior for the shipped product, edit `SKILL.md`. This file governs YOUR behavior during development.
 
 ---
 

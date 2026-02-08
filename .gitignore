@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+memory/boid.db
+.flox/cache/
+.flox/log/
+.flox/run/
+result-*
+.terraform/
+.terraform.lock.hcl
