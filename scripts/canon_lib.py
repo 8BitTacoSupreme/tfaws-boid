@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import sys
 import urllib.request
@@ -16,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-CANON_DIR = Path(__file__).resolve().parent.parent / "canon"
+CANON_DIR = Path(os.environ["BOID_CANON_DIR"]) if os.environ.get("BOID_CANON_DIR") else Path(__file__).resolve().parent.parent / "canon"
 
 
 # ── JSON I/O ──────────────────────────────────────────────────────────

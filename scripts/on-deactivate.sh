@@ -3,8 +3,7 @@
 # Runs on environment exit — checkpoints session, cleans up.
 set -euo pipefail
 
-BOID_DIR="${FLOX_ENV_PROJECT:-.}"
-MEMORY_DB="${BOID_DIR}/memory/boid.db"
+MEMORY_DB="${BOID_MEMORY_DB:-${FLOX_ENV_PROJECT:-.}/memory/boid.db}"
 
 # --- Record session end ---
 if [[ -n "${BOID_SESSION_ID:-}" ]] && [[ -f "${MEMORY_DB}" ]]; then

@@ -24,7 +24,7 @@ SESSION_BONUS_PER = 0.05
 SESSION_BONUS_CAP = 0.2
 CONFIDENCE_CAP = 1.0
 
-SCHEMA_FILE = Path(__file__).resolve().parent.parent / "memory" / "schema.sql"
+SCHEMA_FILE = Path(os.environ["BOID_HOME"]) / "memory" / "schema.sql" if os.environ.get("BOID_HOME") else Path(__file__).resolve().parent.parent / "memory" / "schema.sql"
 
 
 # ── Connection ───────────────────────────────────────────────────────

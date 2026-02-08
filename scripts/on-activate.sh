@@ -3,9 +3,9 @@
 # Runs on `flox activate` — initializes Memories DB, validates Canon, sets env vars.
 set -euo pipefail
 
-BOID_DIR="${FLOX_ENV_PROJECT:-.}"
-MEMORY_DB="${BOID_DIR}/memory/boid.db"
-CANON_DIR="${BOID_DIR}/canon"
+BOID_DIR="${BOID_HOME:-${FLOX_ENV_PROJECT:-.}}"
+MEMORY_DB="${BOID_MEMORY_DB:-${BOID_DIR}/memory/boid.db}"
+CANON_DIR="${BOID_CANON_DIR:-${BOID_DIR}/canon}"
 SCHEMA_FILE="${BOID_DIR}/memory/schema.sql"
 
 # --- Initialize Memories SQLite DB (Tier 2) ---

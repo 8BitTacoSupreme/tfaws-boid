@@ -88,17 +88,13 @@ The machinery is proven across 52 tests. The seasoning happens through real use 
 
 ## Using with Claude Code
 
-The boid ships with Claude Code. To use the boid agent in your own project:
+The boid ships with Claude Code. Activate and go:
 
 ```bash
-# Activate the boid (from a checkout of this repo)
-flox activate
-
-# Initialize boid in your project directory
-boid-init /path/to/your/project
-
-# Start the agent
-cd /path/to/your/project && claude
+# From any project directory:
+flox activate -r 8BitTacoSupreme/tfaws-boid
+claude
+# That's it. The boid skill is auto-linked, Canon is loaded, Memories persist locally.
 ```
 
 ### Deploy from Architecture Document
