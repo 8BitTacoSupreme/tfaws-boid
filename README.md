@@ -97,6 +97,66 @@ Active project context. The boid ships `SKILL.md` as a Claude Code skill — it'
 
 For architecture decision records, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## How It Works
+
+```
+                        flox activate -r 8BitTacoSupreme/tfaws-boid
+                                          │
+                ┌─────────────────────────────────────────────────┐
+                │              Nix Store ($FLOX_ENV)              │
+                │                                                 │
+                │  Packages: terraform, tflint, tfsec, infracost, │
+                │  localstack, aws-cli, sqlite3, python3,         │
+                │  claude-code, nodejs                             │
+                │                                                 │
+                │  tfaws-boid package:                             │
+                │  $FLOX_ENV/share/                                │
+                │  ├── claude/                                     │
+                │  │   ├── skills/tfaws-boid/SKILL.md  (Tier 3)   │
+                │  │   └── settings.json               (MCP cfg)  │
+                │  └── boid/                                       │
+                │      ├── canon/*.json  (5 files)     (Tier 1)   │
+                │      ├── scripts/*.py  (4 files)                │
+                │      ├── memory/schema.sql           (Tier 2)   │
+                │      └── sandbox/validate.sh                    │
+                └────────────────────┬────────────────────────────┘
+                                     │
+                               on-activate
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+              Symlink skill    Deploy settings   Init Memories DB
+              into .claude/    .json (merge)     + migrate + session
+                    │                │                │
+                    ▼                ▼                ▼
+                ┌─────────────────────────────────────────────────┐
+                │           Your Project Directory                │
+                │                                                 │
+                │  .claude/skills/tfaws-boid/ → (Nix store link)  │
+                │  .claude/settings.json      ← (merged MCP cfg)  │
+                │  memory/boid.db             ← (Tier 2, local)   │
+                │  CLAUDE.md                  ← (your Tier 3)     │
+                └────────────────────┬────────────────────────────┘
+                                     │
+                                   claude
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+                SKILL.md         3 MCP servers    Shell tools
+               (auto-loaded     (sqlite, fetch,  (terraform, tflint,
+                as skill)        terraform)       tfsec, infracost...)
+                    │                │                │
+                    └────────┬───────┘                │
+                             ▼                        │
+                ┌─────────────────────┐               │
+                │   Agent Context     │◄──────────────┘
+                │                     │
+                │  Tier 3: SKILL.md   │  ← in context window
+                │  + your CLAUDE.md   │
+                │                     │
+                │  Tier 1: Canon      │  ← via scripts/MCP
+                │  Tier 2: Memories   │  ← via scripts/MCP
+                └─────────────────────┘
+```
+
 ## Using with Claude Code
 
 The boid ships with Claude Code. Activate and go:
