@@ -43,6 +43,10 @@ nodejs.pkg-path = "nodejs_22"
 # AI agent (self-contained boid)
 claude-code.pkg-path = "claude-code"
 
+# Boid data package (skill, canon, scripts, schema)
+# NOTE: uncomment after `flox publish` — self-referencing during build is circular
+# tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
+
 # Shell quality
 shellcheck.pkg-path = "shellcheck"
 shfmt.pkg-path = "shfmt"
@@ -72,11 +76,10 @@ lancedb.pkg-path = "python313Packages.lancedb"
 ## -------------------------------------------------------------------
 [hook]
 on-activate = '''
-  echo "terraform-aws-boid environment"
-  echo "  terraform: $(terraform version -json | jq -r '.terraform_version')"
-  echo "  aws-cli:   $(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)"
-  echo "  sqlite3:   $(sqlite3 --version | cut -d' ' -f1)"
-  echo "  node:      $(node --version)"
+  tf_ver=$(terraform version -json | jq -r '.terraform_version')
+  aws_ver=$(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)
+  echo "terraform-aws-boid v0.2.0"
+  echo "  terraform $tf_ver | aws-cli $aws_ver | tflint | tfsec | infracost"
 
   # Resolve boid data: prefer packaged (Nix store), fall back to project checkout
   if [[ -d "$FLOX_ENV/share/boid" ]]; then
@@ -101,7 +104,7 @@ on-activate = '''
         name=$(basename "$skill")
         rm -rf "$claude_target/skills/$name"
         ln -s "$skill" "$claude_target/skills/$name"
-        echo "[boid] Linked skill: $name"
+        : # skill linked silently
       fi
     done
   elif [[ -n "${FLOX_ENV_PROJECT:-}" && -f "${FLOX_ENV_PROJECT}/SKILL.md" ]]; then
@@ -109,7 +112,28 @@ on-activate = '''
     mkdir -p "$claude_target/skills/tfaws-boid"
     rm -rf "$claude_target/skills/tfaws-boid/SKILL.md"
     ln -s "${FLOX_ENV_PROJECT}/SKILL.md" "$claude_target/skills/tfaws-boid/SKILL.md"
-    echo "[boid] Linked skill: tfaws-boid (local dev)"
+    : # skill linked silently (local dev)
+  fi
+
+  # --- Deploy MCP server config ---
+  settings_source="$FLOX_ENV/share/claude/settings.json"
+  settings_target="${PROJECT_DIR}/.claude/settings.json"
+  if [[ -f "$settings_source" ]]; then
+    mkdir -p "${PROJECT_DIR}/.claude"
+    if [[ ! -f "$settings_target" ]]; then
+      cp "$settings_source" "$settings_target"
+    else
+      # Merge boid mcpServers into existing settings (additive, no clobber)
+      merged=$(jq -s '.[0] * {mcpServers: (.[0].mcpServers // {} + .[1].mcpServers // {})}' \
+        "$settings_target" "$settings_source" 2>/dev/null) && \
+        echo "$merged" > "$settings_target"
+    fi
+  elif [[ -n "${FLOX_ENV_PROJECT:-}" && -f "${FLOX_ENV_PROJECT}/.claude/settings.json" ]]; then
+    # Local dev fallback: use project checkout settings as source
+    mkdir -p "${PROJECT_DIR}/.claude"
+    if [[ ! -f "$settings_target" ]]; then
+      cp "${FLOX_ENV_PROJECT}/.claude/settings.json" "$settings_target"
+    fi
   fi
 
   # --- Initialize Memories DB ---
@@ -118,9 +142,6 @@ on-activate = '''
   if [[ ! -f "$MEMORY_DB" && -f "$SCHEMA_FILE" ]]; then
     mkdir -p "${PROJECT_DIR}/memory"
     sqlite3 "$MEMORY_DB" < "$SCHEMA_FILE"
-    echo "[boid] Memories database created at $MEMORY_DB"
-  elif [[ -f "$MEMORY_DB" ]]; then
-    echo "[boid] Memories database loaded"
   fi
 
   # --- Migrate schema if needed ---
@@ -129,7 +150,6 @@ on-activate = '''
     MIGRATE_FILE="${BOID_SHARE}/memory/migrate_v1_to_v2.sql"
     if [[ "$SCHEMA_VER" == "1" && -f "$MIGRATE_FILE" ]]; then
       sqlite3 "$MEMORY_DB" < "$MIGRATE_FILE"
-      echo "[boid] Migrated Memories schema v1 → v2"
     fi
   fi
 
@@ -139,7 +159,6 @@ on-activate = '''
   for f in "${canon_files[@]}"; do
     [[ -f "${BOID_SHARE}/canon/${f}" ]] && canon_count=$((canon_count + 1))
   done
-  echo "[boid] Canon: ${canon_count}/${#canon_files[@]} knowledge files loaded"
 
   # --- Session tracking ---
   SESSION_ID="$(python3 -c 'import uuid; print(uuid.uuid4())')"
@@ -155,8 +174,12 @@ on-activate = '''
   export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}"
   export PYTHONDONTWRITEBYTECODE=1
 
-  echo "[boid] Session ${SESSION_ID:0:8}... started"
-  echo "[boid] Claude Code ready — run 'claude' to start"
+  # --- Compact status line ---
+  mem_status="none"
+  [[ -f "$MEMORY_DB" ]] && mem_status="ready"
+  echo "  Canon: ${canon_count}/${#canon_files[@]} | Memories: ${mem_status} | Session: ${SESSION_ID:0:8}"
+  echo ""
+  echo "  Run 'claude' to start"
 '''
 #   # -> Perform initialization steps, e.g. create a python venv
 #   # -> Useful environment variables:
@@ -203,7 +226,7 @@ common = '''
 
 [build.tfaws-boid]
 description = "Terraform+AWS boid — skill, canon, and scripts"
-version = "0.1.0"
+version = "0.2.0"
 command = """
   # Skill (Claude Code auto-discovery)
   mkdir -p $out/share/claude/skills/tfaws-boid
@@ -226,6 +249,10 @@ command = """
   # Sandbox
   mkdir -p $out/share/boid/sandbox
   cp sandbox/validate.sh $out/share/boid/sandbox/
+
+  # Claude Code settings (MCP servers + permissions)
+  mkdir -p $out/share/claude
+  cp .claude/settings.json $out/share/claude/settings.json
 """
 
 
