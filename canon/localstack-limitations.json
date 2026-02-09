@@ -1,0 +1,130 @@
+{
+  "_meta": {
+    "source": "tfaws-boid Canon — LocalStack compatibility matrix",
+    "version": "0.1.0",
+    "date": "2026-02-09",
+    "description": "LocalStack service support levels for Terraform validation. Documents which AWS services work on free tier vs require Pro/Ultimate."
+  },
+  "tiers": {
+    "community": {
+      "name": "Community",
+      "description": "Free tier - basic AWS service mocking",
+      "price": "free"
+    },
+    "pro": {
+      "name": "Pro",
+      "description": "Paid tier - enhanced service coverage including IAM policy enforcement",
+      "price": "paid"
+    },
+    "ultimate": {
+      "name": "Ultimate",
+      "description": "Enterprise - full service coverage including EKS, EMR, and advanced features",
+      "price": "enterprise"
+    }
+  },
+  "services": [
+    {
+      "service": "eks",
+      "tier_required": "ultimate",
+      "terraform_resources": [
+        "aws_eks_cluster",
+        "aws_eks_node_group",
+        "aws_eks_addon",
+        "aws_eks_fargate_profile",
+        "aws_eks_identity_provider_config"
+      ],
+      "error_pattern": "API for service 'eks' not yet implemented or pro feature",
+      "workaround": "Set enable_eks = false for LocalStack free tier validation. EKS resources will be skipped during sandbox testing but created in real AWS.",
+      "notes": "EKS is complex and requires Ultimate tier for full cluster simulation."
+    },
+    {
+      "service": "ec2.eip",
+      "tier_required": "community",
+      "limitation": "DescribeAddressesAttribute API not implemented",
+      "terraform_resources": [
+        "aws_eip",
+        "aws_eip_association"
+      ],
+      "error_pattern": "The describe_addresses_attribute action has not been implemented",
+      "workaround": "Disable NAT Gateways with enable_nat_gateway = false for LocalStack validation. EIPs work for basic allocation but fail on attribute queries.",
+      "notes": "Basic EIP allocation works; the limitation is on querying EIP attributes during refresh."
+    },
+    {
+      "service": "ec2.vpc_endpoints",
+      "tier_required": "community",
+      "limitation": "Interface endpoints partially supported; Gateway endpoints work",
+      "terraform_resources": [
+        "aws_vpc_endpoint",
+        "aws_vpc_endpoint_service"
+      ],
+      "workaround": "Test each endpoint type individually. S3 and DynamoDB Gateway endpoints work reliably. Interface endpoints may fail for some services.",
+      "notes": "Gateway endpoints (S3, DynamoDB) are well-supported. Interface endpoints vary by service."
+    },
+    {
+      "service": "organizations",
+      "tier_required": "pro",
+      "terraform_resources": [
+        "aws_organizations_organization",
+        "aws_organizations_account",
+        "aws_organizations_organizational_unit",
+        "aws_organizations_policy"
+      ],
+      "error_pattern": "API for service 'organizations' not yet implemented or pro feature",
+      "workaround": "Organizations resources cannot be validated on free tier. Use conditional creation or skip in sandbox.",
+      "notes": "Multi-account testing requires Pro tier."
+    },
+    {
+      "service": "rds",
+      "tier_required": "community",
+      "limitation": "Basic RDS supported; some features like RDS Proxy require Pro",
+      "terraform_resources": [
+        "aws_db_instance",
+        "aws_db_subnet_group",
+        "aws_db_parameter_group"
+      ],
+      "workaround": "Basic RDS instances work. For RDS Proxy or advanced features, use enable_rds_proxy = false.",
+      "notes": "Core RDS functionality works on Community tier."
+    },
+    {
+      "service": "elasticache",
+      "tier_required": "pro",
+      "terraform_resources": [
+        "aws_elasticache_cluster",
+        "aws_elasticache_replication_group",
+        "aws_elasticache_subnet_group"
+      ],
+      "error_pattern": "API for service 'elasticache' not yet implemented or pro feature",
+      "workaround": "Set enable_elasticache = false for LocalStack free tier validation.",
+      "notes": "ElastiCache requires Pro tier for proper simulation."
+    },
+    {
+      "service": "msk",
+      "tier_required": "pro",
+      "terraform_resources": [
+        "aws_msk_cluster",
+        "aws_msk_configuration"
+      ],
+      "error_pattern": "API for service 'kafka' not yet implemented or pro feature",
+      "workaround": "Set enable_msk = false for LocalStack free tier validation.",
+      "notes": "Managed Kafka (MSK) requires Pro tier."
+    }
+  ],
+  "detection": {
+    "endpoint": "/_localstack/info",
+    "edition_field": "edition",
+    "values": {
+      "community": "community",
+      "pro": "pro",
+      "ultimate": "ultimate"
+    }
+  },
+  "recommended_tfvars": {
+    "localstack_free_tier": {
+      "enable_eks": false,
+      "enable_nat_gateway": false,
+      "enable_elasticache": false,
+      "enable_msk": false,
+      "enable_organizations": false
+    }
+  }
+}

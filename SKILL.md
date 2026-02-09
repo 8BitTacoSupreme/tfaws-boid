@@ -67,6 +67,48 @@ Active context for the current project. This is what you're reading now.
 
 ---
 
+## LocalStack Free Tier Limitations
+
+The sandbox uses LocalStack Community (free tier) by default. Some AWS services are not available:
+
+| Service | Status | Workaround |
+|---------|--------|------------|
+| **EKS** | Not supported (requires Ultimate) | `enable_eks = false` |
+| **EIP attributes** | DescribeAddressesAttribute not implemented | `enable_nat_gateway = false` |
+| **Organizations** | Requires Pro | Skip in sandbox |
+| **ElastiCache** | Requires Pro | `enable_elasticache = false` |
+| **MSK** | Requires Pro | `enable_msk = false` |
+| **VPC Endpoints** | Interface endpoints partial; Gateway works | Test individually |
+
+When generating Terraform for sandbox validation, use feature flags:
+
+```hcl
+variable "enable_eks" {
+  description = "Enable EKS cluster (disable for LocalStack free tier)"
+  type        = bool
+  default     = false
+}
+
+variable "enable_nat_gateway" {
+  description = "Enable NAT Gateway with EIP (disable for LocalStack free tier)"
+  type        = bool
+  default     = false
+}
+```
+
+Then wrap resources conditionally:
+
+```hcl
+resource "aws_eks_cluster" "main" {
+  count = var.enable_eks ? 1 : 0
+  # ...
+}
+```
+
+The validate.sh script will detect the LocalStack tier and warn about unsupported resources. Check `localstack-limitations.json` in Canon for the full compatibility matrix.
+
+---
+
 ## Architecture Deployment
 
 You can generate Terraform infrastructure from architecture specifications in two ways:

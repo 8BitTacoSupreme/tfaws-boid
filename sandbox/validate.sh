@@ -42,6 +42,25 @@ if ! curl -sf "${LOCALSTACK_URL}/_localstack/health" > /dev/null 2>&1; then
 fi
 echo "[validate] LocalStack is healthy"
 
+# --- Check LocalStack tier and warn about limitations ---
+check_localstack_tier() {
+    local info_response
+    info_response=$(curl -sf "${LOCALSTACK_URL}/_localstack/info" 2>/dev/null || echo '{}')
+    local tier
+    tier=$(echo "$info_response" | jq -r '.edition // "community"')
+
+    echo "[validate] LocalStack edition: ${tier}"
+
+    if [[ "$tier" == "community" ]]; then
+        echo "[validate] WARNING: LocalStack Community (free) tier detected"
+        echo "[validate]   - EKS not supported: use enable_eks=false"
+        echo "[validate]   - EIP DescribeAddressesAttribute not implemented: use enable_nat_gateway=false"
+        echo "[validate]   - Organizations, ElastiCache, MSK require Pro tier"
+        echo "[validate]   See Canon: localstack-limitations.json for full matrix"
+    fi
+}
+check_localstack_tier
+
 # --- Run tflint ---
 echo "[validate] Running tflint..."
 if tflint --chdir="${TF_DIR}" 2>&1; then

@@ -79,7 +79,7 @@ lancedb.pkg-path = "python313Packages.lancedb"
 on-activate = '''
   tf_ver=$(terraform version -json | jq -r '.terraform_version')
   aws_ver=$(aws --version 2>&1 | cut -d/ -f2 | cut -d' ' -f1)
-  echo "terraform-aws-boid v0.2.0"
+  echo "terraform-aws-boid v0.3.0"
   echo "  terraform $tf_ver | aws-cli $aws_ver | tflint | tfsec | infracost"
 
   # Resolve boid data: prefer packaged (Nix store), fall back to project checkout
@@ -155,7 +155,7 @@ on-activate = '''
   fi
 
   # --- Validate Canon ---
-  canon_files=("error-signatures.json" "aws-limits.json" "provider-compat.json" "iam-eval-rules.json" "sg-interactions.json")
+  canon_files=("error-signatures.json" "aws-limits.json" "provider-compat.json" "iam-eval-rules.json" "sg-interactions.json" "localstack-limitations.json")
   canon_count=0
   for f in "${canon_files[@]}"; do
     [[ -f "${BOID_SHARE}/canon/${f}" ]] && canon_count=$((canon_count + 1))
@@ -227,7 +227,7 @@ common = '''
 
 [build.tfaws-boid]
 description = "Terraform+AWS boid — skill, canon, and scripts"
-version = "0.2.0"
+version = "0.3.0"
 command = """
   # Skill (Claude Code auto-discovery)
   mkdir -p $out/share/claude/skills/tfaws-boid

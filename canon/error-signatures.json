@@ -1,8 +1,8 @@
 {
   "_meta": {
     "source": "terraform-aws-boid Canon — sourced from GitHub issues, provider CHANGELOG, and operational experience",
-    "version": "0.2.0",
-    "date": "2026-02-08",
+    "version": "0.3.0",
+    "date": "2026-02-09",
     "description": "Error message signatures mapped to root causes and fixes. Each entry captures a known Terraform+AWS error pattern, its root cause, and the canonical fix.",
     "schema": {
       "error_pattern": "Regex or substring that matches the error message",
@@ -713,6 +713,34 @@
         "dependency",
         "init",
         "cross-platform"
+      ]
+    },
+    {
+      "error_pattern": "API for service .* not yet implemented or pro feature",
+      "provider": "localstack",
+      "resource": "multiple",
+      "root_cause": "LocalStack free tier (Community edition) doesn't support this AWS service. EKS, Organizations, ElastiCache, MSK, and some advanced features require LocalStack Pro or Ultimate tier.",
+      "fix": "Either upgrade to LocalStack Pro/Ultimate, or disable the unsupported resource with a feature flag (e.g., enable_eks = false). Check localstack-limitations.json in Canon for the full service matrix and recommended tfvars for free tier.",
+      "severity": "high",
+      "tags": [
+        "localstack",
+        "free-tier",
+        "unsupported-service",
+        "pro-feature"
+      ]
+    },
+    {
+      "error_pattern": "The .* action has not been implemented",
+      "provider": "localstack",
+      "resource": "multiple",
+      "root_cause": "LocalStack hasn't implemented this specific AWS API action. Common with newer or less-used API endpoints like DescribeAddressesAttribute for EIPs. The service may be supported but specific operations are missing.",
+      "fix": "Check LocalStack coverage docs for the specific API. For EIP DescribeAddressesAttribute: disable NAT Gateways on free tier with enable_nat_gateway = false. Use conditional resource creation with count to skip affected resources during sandbox validation.",
+      "severity": "medium",
+      "tags": [
+        "localstack",
+        "api-gap",
+        "partial-implementation",
+        "eip"
       ]
     }
   ]
