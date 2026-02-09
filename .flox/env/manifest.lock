@@ -52,13 +52,6 @@
       "terraform": {
         "pkg-path": "terraform"
       },
-      "tfaws-boid": {
-        "pkg-path": "8BitTacoSupreme/tfaws-boid",
-        "pkg-group": "tfaws-boid",
-        "systems": [
-          "aarch64-darwin"
-        ]
-      },
       "tflint": {
         "pkg-path": "tflint"
       },
@@ -2640,33 +2633,6 @@
       },
       "system": "x86_64-linux",
       "group": "toplevel",
-      "priority": 5
-    },
-    {
-      "attr_path": "tfaws-boid",
-      "derivation": "/nix/store/hjgm3qp28y3ryjp02vwlx4wy4abx1pmb-tfaws-boid-0.2.0.drv",
-      "description": "Terraform+AWS boid — skill, canon, and scripts",
-      "install_id": "tfaws-boid",
-      "locked_url": "https://github.com/8BitTacoSupreme/tfaws-boid.git?rev=df5faba8e7a5ee51f00999f0112d269c7b49b1ea",
-      "name": "tfaws-boid-0.2.0",
-      "pname": "tfaws-boid",
-      "rev": "df5faba8e7a5ee51f00999f0112d269c7b49b1ea",
-      "rev_count": 11,
-      "rev_date": "2026-02-08T20:58:30Z",
-      "scrape_date": "2026-02-09T21:36:29.032834Z",
-      "stabilities": [
-        "staging",
-        "unstable"
-      ],
-      "version": "0.2.0",
-      "outputs_to_install": [
-        "out"
-      ],
-      "outputs": {
-        "out": "/nix/store/hbfycmawysipkmkncnpjx1jglnzwv4qa-tfaws-boid-0.2.0"
-      },
-      "system": "aarch64-darwin",
-      "group": "tfaws-boid",
       "priority": 5
     }
   ]
