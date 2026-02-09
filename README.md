@@ -168,15 +168,13 @@ claude
 # That's it. The boid skill is auto-linked, Canon is loaded, Memories persist locally.
 ```
 
-### Deploy from Architecture Document
-```
-> Read docs/REFERENCE-ARCHITECTURES.md and deploy section 2 into deploy/
-```
+Once Claude is running, just ask:
 
-### Deploy Interactively
 ```
 > I need a 3-AZ VPC with private subnets, NAT gateway, and an EKS cluster
 ```
+
+The agent has the skill, the Canon, the linters, and the sandbox tools — it knows what to do.
 
 ## How It Learns
 
@@ -196,28 +194,22 @@ single_session_ceiling = 0.7
 
 The machinery is proven across 52 tests. The seasoning happens through real use — corrections compound over sessions, not minutes.
 
-## Sandbox Validation
+## Sandbox Validation (Optional)
 
-Start LocalStack for plan/apply testing:
+If you have Podman running, you can start a LocalStack sandbox for local plan/apply testing:
 
 ```bash
-# Start the sandbox
+# Start LocalStack (requires Podman)
 podman-compose -f sandbox/localstack-compose.yml up -d
 
-# Validate a Terraform config against LocalStack
+# Validate a Terraform config
 sandbox/validate.sh path/to/your/tf-dir --analyze
 
 # Full pipeline: lint + security scan + plan + Canon analysis
 sandbox/validate.sh tests/e2e/fixtures/vpc/ --plan-json --analyze
-
-# Apply after validation
-sandbox/validate.sh path/to/your/tf-dir --apply
-
-# Clean up
-sandbox/validate.sh path/to/your/tf-dir --destroy
 ```
 
-The validation pipeline runs tflint, tfsec, terraform plan, and Canon analysis in sequence. No suggestion should reach the user without passing through it.
+This is not required for normal use. The Canon, linters, and plan analyzer all work without LocalStack.
 
 ## Forking & Sharing
 
