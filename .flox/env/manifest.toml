@@ -44,10 +44,6 @@ nodejs.pkg-path = "nodejs_22"
 claude-code.pkg-path = "claude-code"
 claude-code.pkg-group = "claude"
 
-# Boid data package (skill, canon, scripts, schema)
-tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
-tfaws-boid.systems = ["aarch64-darwin"]
-
 # Shell quality
 shellcheck.pkg-path = "shellcheck"
 shfmt.pkg-path = "shfmt"
@@ -58,6 +54,9 @@ git.pkg-path = "git"
 tree.pkg-path = "tree"
 chromadb.pkg-path = "python313Packages.chromadb"
 lancedb.pkg-path = "python313Packages.lancedb"
+tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
+tfaws-boid.systems = ["aarch64-darwin"]
+tfaws-boid.pkg-group = "tfaws-boid"
 
 
 # gum.pkg-path = "gum"
