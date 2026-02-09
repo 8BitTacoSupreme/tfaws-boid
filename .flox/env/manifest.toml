@@ -54,9 +54,10 @@ git.pkg-path = "git"
 tree.pkg-path = "tree"
 chromadb.pkg-path = "python313Packages.chromadb"
 lancedb.pkg-path = "python313Packages.lancedb"
-tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
-tfaws-boid.systems = ["aarch64-darwin"]
-tfaws-boid.pkg-group = "tfaws-boid"
+# tfaws-boid package — temporarily removed for publish, re-add after
+# tfaws-boid.pkg-path = "8BitTacoSupreme/tfaws-boid"
+# tfaws-boid.systems = ["aarch64-darwin"]
+# tfaws-boid.pkg-group = "tfaws-boid"
 
 
 # gum.pkg-path = "gum"
